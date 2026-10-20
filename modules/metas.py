@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 import streamlit as st
+from streamlit_sortables import sort_items
 
 from database import metas_repo as repo
 
@@ -9,8 +10,24 @@ PRIORIDADE_ORDEM = {"alta": 0, "media": 1, "baixa": 2}
 STATUS = {"ativa": "Ativa", "concluida": "Concluída", "arquivada": "Arquivada"}
 STATUS_ORDEM = {"ativa": 0, "concluida": 1, "arquivada": 2}
 
-VISOES = ["semana", "mes", "atrasadas", "sem_prazo"]
-VISOES_NOME = {"semana": "Semanal", "mes": "Mensal", "atrasadas": "Atrasadas", "sem_prazo": "Sem prazo"}
+VISOES = ["semana", "mes", "atrasadas", "sem_prazo", "todas", "arquivadas"]
+VISOES_NOME = {
+    "semana": "Semanal", "mes": "Mensal", "atrasadas": "Atrasadas",
+    "sem_prazo": "Sem prazo", "todas": "Todas", "arquivadas": "Arquivadas",
+}
+
+# Estilo do componente de arrastar (roda num iframe, então não herda o CSS do app).
+ESTILO_SORTABLE = """
+.sortable-component { background: transparent; border: none; padding: 0; }
+.sortable-container { background: transparent; border: none; }
+.sortable-container-body { background: transparent; }
+.sortable-item {
+    background: #23232d; color: #ececf1; border: 1px solid #2b2b37;
+    border-radius: 10px; font-family: 'Outfit', sans-serif; font-size: 14px;
+    padding: 8px 12px; cursor: grab;
+}
+.sortable-item:hover { border-color: #b44cff; background: #2a2a36; }
+"""
 
 
 def _fmt_data(d):
@@ -33,6 +50,10 @@ def _atrasada(meta, hoje):
 
 
 def _filtrar(metas, visao, hoje):
+    """Metas arquivadas só aparecem na visão 'arquivadas'."""
+    if visao == "arquivadas":
+        return [m for m in metas if m["status"] == "arquivada"]
+    metas = [m for m in metas if m["status"] != "arquivada"]
     if visao == "semana":
         ini, fim = _intervalo_semana(hoje)
         return [m for m in metas if m["prazo"] and ini <= m["prazo"] <= fim]
@@ -41,79 +62,136 @@ def _filtrar(metas, visao, hoje):
         return [m for m in metas if m["prazo"] and ini <= m["prazo"] <= fim]
     if visao == "atrasadas":
         return [m for m in metas if _atrasada(m, hoje)]
-    return [m for m in metas if m["prazo"] is None]
+    if visao == "sem_prazo":
+        return [m for m in metas if m["prazo"] is None]
+    return metas
 
 
 def _ordenar(metas):
+    """Prioridade (alta primeiro), depois status (ativas antes das concluídas), depois prazo."""
     return sorted(
         metas,
         key=lambda m: (
+            PRIORIDADE_ORDEM[m["prioridade"]],
             STATUS_ORDEM[m["status"]],
             m["prazo"] or date.max,
-            PRIORIDADE_ORDEM[m["prioridade"]],
         ),
     )
 
 
-# ---------- diálogos ----------
+# ---------- diálogo de criação/edição ----------
+# O diálogo trabalha numa cópia (session_state["dlg"]) e só grava no banco ao clicar em Salvar.
+# Os diálogos do Streamlit reexecutam só a própria função a cada interação, por isso o estado
+# inicial é montado em _abrir_dialogo, antes de chamar o diálogo.
 
-def _form_meta(meta=None):
-    with st.form("form_meta", border=False):
-        titulo = st.text_input("Título", value=meta["titulo"] if meta else "", max_chars=150)
-        descricao = st.text_area("Descrição", value=(meta["descricao"] or "") if meta else "")
-        col1, col2 = st.columns(2)
-        prioridade = col1.selectbox(
-            "Prioridade",
-            list(PRIORIDADES),
-            index=list(PRIORIDADES).index(meta["prioridade"]) if meta else 1,
-            format_func=PRIORIDADES.get,
+def _abrir_dialogo(meta=None, tarefas=()):
+    nonce = st.session_state.get("dlg_nonce", 0) + 1
+    st.session_state.dlg_nonce = nonce
+    st.session_state.dlg = {
+        "nonce": nonce,
+        "meta": meta,
+        "proximo_uid": len(tarefas),
+        "tarefas": [
+            {"uid": i, "id": t["id"], "descricao": t["descricao"], "prazo": t["prazo"]}
+            for i, t in enumerate(tarefas)
+        ],
+    }
+    _dialogo_meta()
+
+
+def _rotulo(tarefa):
+    """Texto mostrado na lista arrastável. Os caracteres invisíveis ao final tornam únicos
+    rótulos iguais, já que o componente identifica os itens pelo texto."""
+    prazo = f"  ·  {_fmt_data(tarefa['prazo'])}" if tarefa["prazo"] else ""
+    return f"{tarefa['descricao']}{prazo}" + "​" * (tarefa["uid"] + 1)
+
+
+def _editor_tarefas(dlg):
+    tarefas = dlg["tarefas"]
+    st.markdown("**Tarefas**")
+    if tarefas:
+        st.caption("Arraste para mudar a ordem.")
+        por_rotulo = {_rotulo(t): t for t in tarefas}
+        # A chave muda só quando tarefas são adicionadas/removidas, não ao reordenar.
+        chave = f"sort_{dlg['nonce']}_{'-'.join(str(u) for u in sorted(t['uid'] for t in tarefas))}"
+        ordenados = sort_items(list(por_rotulo), direction="vertical", custom_style=ESTILO_SORTABLE, key=chave)
+        # Logo após adicionar/remover, o componente pode devolver a lista antiga por um instante:
+        # só aceita a ordem devolvida se ela tiver exatamente as tarefas atuais.
+        if sorted(ordenados) == sorted(por_rotulo):
+            dlg["tarefas"] = tarefas = [por_rotulo[r] for r in ordenados]
+
+        c1, c2 = st.columns([4, 1], vertical_alignment="bottom")
+        remover = c1.selectbox(
+            "Remover tarefa", tarefas, index=None, placeholder="Escolha a tarefa a remover",
+            format_func=lambda t: t["descricao"], key=f"dlg_rem_{dlg['nonce']}_{len(tarefas)}",
         )
-        prazo = col2.date_input("Prazo (opcional)", value=meta["prazo"] if meta else None, format="DD/MM/YYYY")
-        if st.form_submit_button("Salvar", type="primary", use_container_width=True):
-            if not titulo.strip():
-                st.error("O título é obrigatório.")
-                return
-            if meta:
-                repo.atualizar_meta(meta["id"], titulo.strip(), descricao.strip() or None, prioridade, prazo)
-            else:
-                repo.criar_meta(titulo.strip(), descricao.strip() or None, prioridade, prazo)
-            st.rerun()
+        if c2.button("", icon=":material/delete:", help="Remover tarefa", disabled=remover is None,
+                     use_container_width=True, key=f"dlg_rem_btn_{dlg['nonce']}"):
+            dlg["tarefas"] = [t for t in tarefas if t["uid"] != remover["uid"]]
+            st.rerun(scope="fragment")
+    else:
+        st.caption("Nenhuma tarefa ainda.")
+
+    with st.form(f"dlg_nova_tarefa_{dlg['nonce']}_{dlg['proximo_uid']}", border=False):
+        c1, c2, c3 = st.columns([5, 3, 1], vertical_alignment="bottom")
+        descricao = c1.text_input("Nova tarefa", placeholder="Nova tarefa...")
+        prazo = c2.date_input("Prazo da tarefa (opcional)", value=None, format="DD/MM/YYYY")
+        if c3.form_submit_button("", icon=":material/add:", help="Adicionar tarefa", use_container_width=True):
+            if descricao.strip():
+                dlg["tarefas"].append(
+                    {"uid": dlg["proximo_uid"], "id": None, "descricao": descricao.strip(), "prazo": prazo}
+                )
+                dlg["proximo_uid"] += 1
+                st.rerun(scope="fragment")
 
 
-@st.dialog("Nova meta")
-def _dialogo_nova_meta():
-    _form_meta()
+@st.dialog("Meta", width="large")
+def _dialogo_meta():
+    dlg = st.session_state.dlg
+    meta = dlg["meta"]
+    n = dlg["nonce"]
 
+    titulo = st.text_input("Título", value=meta["titulo"] if meta else "", max_chars=150, key=f"dlg_titulo_{n}")
+    descricao = st.text_area("Descrição", value=(meta["descricao"] or "") if meta else "", key=f"dlg_desc_{n}")
+    col1, col2 = st.columns(2)
+    prioridade = col1.selectbox(
+        "Prioridade", list(PRIORIDADES),
+        index=list(PRIORIDADES).index(meta["prioridade"]) if meta else 1,
+        format_func=PRIORIDADES.get, key=f"dlg_prio_{n}",
+    )
+    prazo = col2.date_input(
+        "Prazo (opcional)", value=meta["prazo"] if meta else None, format="DD/MM/YYYY", key=f"dlg_prazo_{n}",
+    )
 
-@st.dialog("Editar meta")
-def _dialogo_editar_meta(meta):
-    _form_meta(meta)
+    _editor_tarefas(dlg)
+
+    if st.button("Salvar", type="primary", use_container_width=True, key=f"dlg_salvar_{n}"):
+        if not titulo.strip():
+            st.error("O título é obrigatório.")
+            return
+        repo.salvar_meta(
+            meta["id"] if meta else None, titulo.strip(), descricao.strip() or None,
+            prioridade, prazo, dlg["tarefas"],
+        )
+        st.rerun()
 
 
 @st.dialog("Confirmar exclusão")
-def _dialogo_excluir(tipo, item_id, nome):
-    aviso = " Todas as tarefas dela também serão apagadas." if tipo == "meta" else ""
-    st.write(f"Excluir **{nome}**?{aviso}")
+def _dialogo_excluir(meta_id, nome):
+    st.write(f"Excluir **{nome}**? Todas as tarefas dela também serão apagadas.")
     col1, col2 = st.columns(2)
     if col1.button("Cancelar", use_container_width=True):
         st.rerun()
     if col2.button("Excluir", type="primary", use_container_width=True):
-        _excluir(tipo, item_id)
+        repo.excluir_meta(meta_id)
         st.rerun()
 
 
-def _excluir(tipo, item_id):
-    if tipo == "meta":
-        repo.excluir_meta(item_id)
-    else:
-        repo.excluir_tarefa(item_id)
-
-
-def _pedir_exclusao(tipo, item_id, nome):
+def _pedir_exclusao(meta_id, nome):
     if st.session_state.get("confirmar_exclusao", True):
-        _dialogo_excluir(tipo, item_id, nome)
+        _dialogo_excluir(meta_id, nome)
     else:
-        _excluir(tipo, item_id)
+        repo.excluir_meta(meta_id)
         st.rerun()
 
 
@@ -123,25 +201,14 @@ def _alternar_tarefa(tarefa_id):
     repo.definir_tarefa_concluida(tarefa_id, st.session_state[f"tarefa_{tarefa_id}"])
 
 
-def _checklist(meta, tarefas):
+def _checklist(tarefas):
     for t in tarefas:
-        col_chk, col_prazo, col_del = st.columns([6, 2, 1], vertical_alignment="center")
+        col_chk, col_prazo = st.columns([6, 2], vertical_alignment="center")
         col_chk.checkbox(
             t["descricao"], value=bool(t["concluida"]), key=f"tarefa_{t['id']}",
             on_change=_alternar_tarefa, args=(t["id"],),
         )
         col_prazo.caption(_fmt_data(t["prazo"]) if t["prazo"] else "")
-        if col_del.button("", icon=":material/close:", key=f"del_tarefa_{t['id']}", help="Excluir tarefa"):
-            _pedir_exclusao("tarefa", t["id"], t["descricao"])
-
-    with st.form(f"nova_tarefa_{meta['id']}", clear_on_submit=True, border=False):
-        c1, c2, c3 = st.columns([5, 2, 1], vertical_alignment="bottom")
-        descricao = c1.text_input("Nova tarefa", label_visibility="collapsed", placeholder="Nova tarefa...")
-        prazo = c2.date_input("Prazo", value=None, label_visibility="collapsed", format="DD/MM/YYYY",
-                              help="Prazo da tarefa (opcional)")
-        if c3.form_submit_button("", icon=":material/add:", use_container_width=True) and descricao.strip():
-            repo.criar_tarefa(meta["id"], descricao.strip(), prazo)
-            st.rerun()
 
 
 def _cartao(meta, tarefas, hoje):
@@ -163,7 +230,7 @@ def _cartao(meta, tarefas, hoje):
         with acoes:
             b1, b2, b3, b4 = st.columns(4)
             if b1.button("", icon=":material/edit:", key=f"edit_{meta['id']}", help="Editar", use_container_width=True):
-                _dialogo_editar_meta(meta)
+                _abrir_dialogo(meta, tarefas)
             if meta["status"] == "ativa":
                 if b2.button("", icon=":material/check:", key=f"conc_{meta['id']}", help="Concluir meta", use_container_width=True):
                     repo.definir_status(meta["id"], "concluida")
@@ -175,7 +242,7 @@ def _cartao(meta, tarefas, hoje):
                 repo.definir_status(meta["id"], "ativa")
                 st.rerun()
             if b4.button("", icon=":material/delete:", key=f"del_{meta['id']}", help="Excluir", use_container_width=True):
-                _pedir_exclusao("meta", meta["id"], meta["titulo"])
+                _pedir_exclusao(meta["id"], meta["titulo"])
 
         if meta["descricao"]:
             st.markdown(f'<p class="meta-desc">{meta["descricao"]}</p>', unsafe_allow_html=True)
@@ -185,14 +252,14 @@ def _cartao(meta, tarefas, hoje):
         # Estado de aberto/fechado em session_state: st.expander recolhe a cada rerun.
         abertos = st.session_state.setdefault("checklists_abertos", set())
         aberto = meta["id"] in abertos
-        if st.button(
+        if total and st.button(
             f"Checklist ({feitas}/{total})", key=f"toggle_check_{meta['id']}",
             icon=":material/expand_less:" if aberto else ":material/expand_more:",
         ):
             abertos.symmetric_difference_update({meta["id"]})
             st.rerun()
-        if aberto:
-            _checklist(meta, tarefas)
+        if total and aberto:
+            _checklist(tarefas)
 
 
 # ---------- tela ----------
@@ -207,7 +274,7 @@ def render():
     topo, botao = st.columns([3, 2], vertical_alignment="center")
     topo.markdown('<div class="atlas-title">Metas Pessoais</div>', unsafe_allow_html=True)
     if botao.button("Nova meta", icon=":material/add:", type="primary", use_container_width=True):
-        _dialogo_nova_meta()
+        _abrir_dialogo()
 
     contagem = {v: len(_filtrar(metas, v, hoje)) for v in VISOES}
     visao = st.segmented_control(

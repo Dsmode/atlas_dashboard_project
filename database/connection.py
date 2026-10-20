@@ -25,6 +25,18 @@ def _config(com_banco=True):
     return cfg
 
 
+def _migrar(cur):
+    """Ajusta bancos criados por versões anteriores do schema."""
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='tarefas_meta' AND COLUMN_NAME='ordem'",
+        (DB_NAME,),
+    )
+    if cur.fetchone()[0] == 0:
+        cur.execute("ALTER TABLE tarefas_meta ADD COLUMN ordem INT NOT NULL DEFAULT 0 AFTER prazo")
+        cur.execute("UPDATE tarefas_meta SET ordem = id")
+
+
 def init_db():
     """Cria o banco e as tabelas (idempotente) executando o schema.sql."""
     linhas = [
@@ -37,6 +49,7 @@ def init_db():
         cur = conn.cursor()
         for comando in comandos:
             cur.execute(comando)
+        _migrar(cur)
         conn.commit()
     finally:
         conn.close()

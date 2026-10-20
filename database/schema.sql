@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tarefas_meta (
     meta_id INT NOT NULL,
     descricao VARCHAR(255) NOT NULL,
     prazo DATE NULL,
+    ordem INT NOT NULL DEFAULT 0,
     concluida TINYINT(1) NOT NULL DEFAULT 0,
     data_conclusao DATETIME NULL,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

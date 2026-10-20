@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --atlas-bg: #0d0d11;
+    --atlas-panel: #15151b;
+    --atlas-card: #1b1b23;
+    --atlas-border: #2b2b37;
+    --atlas-purple: #b44cff;
+    --atlas-purple-soft: rgba(180, 76, 255, 0.16);
+    --atlas-text-dim: #8d8d9c;
+}
+
+html, body, [class*="st-"], .stApp, button, input, textarea {
+    font-family: 'Outfit', sans-serif !important;
+}
+
+/* material icons do Streamlit precisam manter a própria fonte */
+span[data-testid="stIconMaterial"] {
+    font-family: 'Material Symbols Rounded' !important;
+}
+
+.stApp {
+    background:
+        radial-gradient(900px 500px at 85% -10%, rgba(180, 76, 255, 0.10), transparent 60%),
+        var(--atlas-bg);
+}
+
+header[data-testid="stHeader"] { background: transparent; }
+footer, #MainMenu { visibility: hidden; }
+.block-container { padding-top: 2.2rem; max-width: 1100px; }
+
+/* ---------- Sidebar (HUD) ---------- */
+section[data-testid="stSidebar"] {
+    background: var(--atlas-panel);
+    border-right: 1px solid var(--atlas-border);
+}
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapsedControl"] { display: none; }
+
+.atlas-brand {
+    display: flex; align-items: center; gap: .6rem;
+    font-weight: 700; font-size: 1.35rem; letter-spacing: .28em;
+    color: #fff; margin: .4rem 0 1.4rem 0;
+}
+.atlas-brand .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--atlas-purple);
+    box-shadow: 0 0 12px var(--atlas-purple);
+}
+.atlas-nav-label {
+    color: var(--atlas-text-dim); font-size: .72rem;
+    letter-spacing: .18em; margin: .2rem 0 .5rem .2rem;
+}
+
+section[data-testid="stSidebar"] .stButton > button {
+    justify-content: flex-start;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c9c9d6;
+    font-weight: 500;
+    border-radius: 12px;
+    padding: .55rem .9rem;
+}
+section[data-testid="stSidebar"] .stButton > button > div,
+section[data-testid="stSidebar"] .stButton > button span[data-has-shortcut] {
+    justify-content: flex-start;
+    width: 100%;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--atlas-purple-soft);
+    color: #fff;
+}
+section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: var(--atlas-purple);
+    color: #fff;
+    box-shadow: 0 0 18px rgba(180, 76, 255, 0.35);
+}
+
+/* ---------- Cartões ---------- */
+div[class*="st-key-meta_card"],
+div[class*="st-key-home_card"] {
+    background: var(--atlas-card);
+    border: 1px solid var(--atlas-border);
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px transparent, 0 0 14px rgba(180, 76, 255, 0.06);
+    transition: border-color .2s, box-shadow .2s;
+}
+div[class*="st-key-meta_card"]:hover {
+    border-color: rgba(180, 76, 255, 0.55);
+    box-shadow: 0 0 18px rgba(180, 76, 255, 0.18);
+}
+
+.atlas-title { font-size: 1.9rem; font-weight: 600; margin-bottom: .2rem; }
+.atlas-sub { color: var(--atlas-text-dim); margin-bottom: 1.2rem; }
+
+.meta-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
+.meta-desc { color: var(--atlas-text-dim); font-size: .92rem; margin: .1rem 0 .4rem 0; }
+.badge {
+    display: inline-block; padding: .12rem .65rem; border-radius: 999px;
+    font-size: .74rem; font-weight: 500; margin-right: .4rem;
+    border: 1px solid var(--atlas-border); color: #d6d6e0;
+}
+.badge.alta { border-color: #ff4d8d; color: #ff7aa8; }
+.badge.media { border-color: var(--atlas-purple); color: #d39bff; }
+.badge.baixa { border-color: #4dd2c1; color: #7fe3d6; }
+.badge.status-concluida { background: rgba(77, 210, 193, .12); }
+.badge.status-arquivada { color: var(--atlas-text-dim); }
+.badge.atrasada { border-color: #ff4d4d; color: #ff7a7a; }
+
+/* ---------- Progresso ---------- */
+[data-testid="stProgressBarTrack"] { background: #2b2b37; }
+[data-testid="stProgressBarTrack"] > div {
+    background: linear-gradient(90deg, #7a2fd1, var(--atlas-purple));
+    box-shadow: 0 0 10px rgba(180, 76, 255, 0.5);
+}
+
+/* botão que abre/fecha o checklist */
+div[class*="st-key-toggle_check"] button {
+    justify-content: flex-start;
+    border: none; background: transparent; color: #c9c9d6; padding-left: 0;
+}
+div[class*="st-key-toggle_check"] button:hover { color: #fff; background: transparent; }
+div[data-testid="stProgress"] div[role="progressbar"] > div > div,
+div[data-testid="stProgress"] > div > div > div > div {
+    background: linear-gradient(90deg, #7a2fd1, var(--atlas-purple));
+}
+
+/* ---------- Logo placeholder ---------- */
+.logo-placeholder {
+    width: 180px; height: 180px; margin: 2.5rem auto 1rem auto;
+    border: 2px dashed var(--atlas-purple); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--atlas-purple); font-weight: 600; letter-spacing: .2em;
+    box-shadow: 0 0 40px rgba(180, 76, 255, 0.25), inset 0 0 30px rgba(180, 76, 255, 0.12);
+}
+.home-wrap { text-align: center; }
+.home-wrap h1 { font-weight: 700; letter-spacing: .3em; margin-bottom: .2rem; }

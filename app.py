@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 
 import streamlit as st
@@ -7,8 +8,11 @@ from modules import home, metas
 
 st.set_page_config(page_title="ATLAS", page_icon="🪐", layout="wide")
 
-CSS_PATH = Path(__file__).parent / "assets" / "style.css"
-st.markdown(f"<style>{CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+ASSETS = Path(__file__).parent / "assets"
+# a rede geométrica do fundo é um SVG embutido no CSS (o marcador __REDE__ vira um data URI)
+_rede = base64.b64encode((ASSETS / "rede.svg").read_bytes()).decode()
+_css = (ASSETS / "style.css").read_text(encoding="utf-8").replace("__REDE__", f"data:image/svg+xml;base64,{_rede}")
+st.markdown(f"<style>{_css}</style>", unsafe_allow_html=True)
 
 # Para adicionar um módulo novo: criar modules/<nome>.py com render() e registrar aqui.
 MODULOS = {
@@ -37,7 +41,7 @@ if "pagina" not in st.session_state:
 
 with st.sidebar:
     st.markdown('<div class="atlas-brand"><span class="dot"></span>ATLAS</div>', unsafe_allow_html=True)
-    st.markdown('<div class="atlas-nav-label">MÓDULOS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="atlas-nav-label">FERRAMENTAS</div>', unsafe_allow_html=True)
     for nome, (icone, _) in MODULOS.items():
         ativo = st.session_state.pagina == nome
         if st.button(nome, icon=icone, key=f"nav_{nome}", use_container_width=True,

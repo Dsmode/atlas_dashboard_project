@@ -7,10 +7,10 @@ from database.connection import init_db
 from modules import home, metas
 
 ASSETS = Path(__file__).parent / "assets"
-_logo = ASSETS / "logo.png"
+_favicon = ASSETS / "favicon.png"
 
-# a logo também é o ícone da aba do navegador (emoji enquanto o arquivo não existir)
-st.set_page_config(page_title="ATLAS", page_icon=str(_logo) if _logo.exists() else "🪐", layout="wide")
+# ícone da aba do navegador: o A recortado da logo (emoji enquanto o arquivo não existir)
+st.set_page_config(page_title="ATLAS", page_icon=str(_favicon) if _favicon.exists() else "🪐", layout="wide")
 
 # a rede geométrica do fundo é um SVG embutido no CSS (o marcador __REDE__ vira um data URI)
 _rede = base64.b64encode((ASSETS / "rede.svg").read_bytes()).decode()

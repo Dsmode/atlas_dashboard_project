@@ -3,34 +3,73 @@
 <head>
 <meta charset="utf-8">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap');
   html, body { margin: 0; padding: 0; background: transparent; }
   body { font-family: 'Outfit', 'Source Sans', sans-serif; font-size: 14px; color: #ececf1; }
-  #lista { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+  /* folga em volta: a linha levantada (maior, com sombra) não pode ser cortada pela borda do iframe;
+     o CSS do app compensa a folga lateral com margem negativa no iframe */
+  #lista { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 16px; }
+
   .item {
-    display: flex; align-items: center; gap: 10px; padding: 6px 10px;
-    background: #23232d; border: 1px solid #2b2b37; border-radius: 10px;
-    user-select: none; -webkit-user-select: none;
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(210, 170, 255, 0.14); border-radius: 10px;
+    user-select: none; -webkit-user-select: none; position: relative;
+    transition: border-color .2s, background .2s, box-shadow .2s;
   }
-  .item:hover { border-color: #b44cff; }
-  .item.arrastando { opacity: .85; border-color: #b44cff; background: #2a2a36; box-shadow: 0 4px 14px rgba(0,0,0,.45); position: relative; z-index: 2; }
-  .alca { cursor: grab; color: #8d8d9c; font-size: 18px; line-height: 1; touch-action: none; padding: 0 2px; }
-  .alca:hover { color: #b44cff; }
-  .item.arrastando .alca { cursor: grabbing; }
-  .chk { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; flex: none; margin: 0;
-         border: 1.5px solid #8d8d9c; border-radius: 4px; background: transparent; cursor: pointer; position: relative; }
-  .chk:checked { background: #b44cff; border-color: #b44cff; }
-  .chk:checked::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
-                        border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .item.feita .txt { color: #8d8d9c; text-decoration: line-through; }
-  .prazo { color: #8d8d9c; font-size: 12px; flex: none; }
+  .item:hover { border-color: rgba(180, 76, 255, 0.45); background: rgba(180, 76, 255, 0.05); }
+  /* a linha levantada acompanha o ponteiro (transform), com sombra e brilho roxo */
+  .item.arrastando {
+    z-index: 3; transition: none; cursor: grabbing;
+    background: #231d36; border-color: #b44cff; transform-origin: center;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(180, 76, 255, 0.35);
+  }
+  /* ao soltar, a linha desliza até o encaixe */
+  .item.assentando { z-index: 2; transition: transform .22s cubic-bezier(.2, .8, .3, 1), box-shadow .22s, border-color .22s; }
+
+  .alca { display: flex; align-items: center; cursor: grab; color: #6f6f82; padding: 4px 2px; touch-action: none; transition: color .2s; }
+  .alca svg { width: 14px; height: 18px; fill: currentColor; display: block; }
+  .item:hover .alca { color: #a98bd0; }
+  .alca:hover, .item.arrastando .alca { color: #d39bff; }
+
+  .chkwrap { position: relative; display: flex; flex: none; cursor: pointer; }
+  .chkwrap input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .box {
+    width: 20px; height: 20px; box-sizing: border-box; border-radius: 50%;
+    border: 1.5px solid #8d8d9c; display: flex; align-items: center; justify-content: center;
+    transition: background .25s, border-color .25s, box-shadow .25s;
+  }
+  .chkwrap:hover .box { border-color: #b44cff; }
+  .box svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .box path { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .3s ease .05s; }
+  .feita .box { background: linear-gradient(135deg, #c15bff, #7a2fd1); border-color: transparent; box-shadow: 0 0 9px rgba(180, 76, 255, 0.55); }
+  .feita .box path { stroke-dashoffset: 0; }
+  .chkwrap input:focus-visible + .box { outline: 2px solid #d39bff; outline-offset: 2px; }
+  .box.pop { animation: pop .3s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes pop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
+
+  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; color: #ececf1; transition: color .3s; }
+  /* o risco "corre" da esquerda para a direita ao concluir, só sob o texto */
+  .t { background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 0 1.5px; transition: background-size .35s ease; }
+  .feita .txt { color: #8d8d9c; }
+  .feita .t { background-size: 100% 1.5px; }
+  .prazo { color: #8d8d9c; font-size: 12px; flex: none; transition: opacity .3s; }
+  .feita .prazo { opacity: .6; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
 <div id="lista"></div>
 <script>
   const lista = document.getElementById("lista");
+  const semMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const elementos = new Map(); // id da tarefa -> linha, para atualizar sem recriar (preserva as animações)
   let contador = 0;
+
+  const ALCA = '<svg viewBox="0 0 14 18"><circle cx="4" cy="3" r="1.5"/><circle cx="10" cy="3" r="1.5"/><circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/><circle cx="4" cy="15" r="1.5"/><circle cx="10" cy="15" r="1.5"/></svg>';
+  const CHECK = '<svg viewBox="0 0 12 12"><path d="M2.4 6.3l2.4 2.4 4.8-5.4" pathLength="1"/></svg>';
 
   function enviar(tipo, valor) {
     contador += 1;
@@ -42,35 +81,69 @@
   function ajustarAltura() {
     window.parent.postMessage({
       isStreamlitMessage: true, type: "streamlit:setFrameHeight",
-      height: lista.getBoundingClientRect().height + 6,
+      height: lista.getBoundingClientRect().height + 2,
     }, "*");
   }
 
+  function criarLinha(t) {
+    const el = document.createElement("div");
+    el.className = "item";
+    el.dataset.id = t.id;
+    el.innerHTML =
+      '<span class="alca" title="Arraste para reordenar">' + ALCA + '</span>' +
+      '<label class="chkwrap"><input type="checkbox"><span class="box">' + CHECK + '</span></label>' +
+      '<span class="txt"><span class="t"></span></span><span class="prazo"></span>';
+    const chk = el.querySelector("input");
+    const box = el.querySelector(".box");
+    chk.addEventListener("change", () => {
+      el.classList.toggle("feita", chk.checked);
+      if (chk.checked && !semMovimento) {
+        box.classList.remove("pop"); void box.offsetWidth; box.classList.add("pop");
+      }
+      enviar("toggle", { tarefa_id: t.id, concluida: chk.checked });
+    });
+    box.addEventListener("animationend", () => box.classList.remove("pop"));
+    ligarArrasto(el.querySelector(".alca"), el);
+    return el;
+  }
+
+  // Reconcilia a lista com os dados: cria o que falta, atualiza o que mudou e remove o que saiu.
   function desenhar(itens) {
-    lista.innerHTML = "";
-    itens.forEach((t) => {
-      const el = document.createElement("div");
-      el.className = "item" + (t.concluida ? " feita" : "");
-      el.dataset.id = t.id;
-
-      const alca = document.createElement("span");
-      alca.className = "alca"; alca.textContent = "⠿"; alca.title = "Arraste para reordenar";
-      const chk = document.createElement("input");
-      chk.type = "checkbox"; chk.className = "chk"; chk.checked = !!t.concluida;
-      chk.addEventListener("change", () => {
-        el.classList.toggle("feita", chk.checked);
-        enviar("toggle", { tarefa_id: t.id, concluida: chk.checked });
-      });
-      const txt = document.createElement("span");
-      txt.className = "txt"; txt.textContent = t.descricao;
-      const prazo = document.createElement("span");
-      prazo.className = "prazo"; prazo.textContent = t.prazo || "";
-
-      el.append(alca, chk, txt, prazo);
-      ligarArrasto(alca, el);
-      lista.appendChild(el);
+    const ids = new Set(itens.map((t) => t.id));
+    for (const [id, el] of elementos) {
+      if (!ids.has(id)) { el.remove(); elementos.delete(id); }
+    }
+    itens.forEach((t, i) => {
+      let el = elementos.get(t.id);
+      if (!el) { el = criarLinha(t); elementos.set(t.id, el); }
+      el.classList.toggle("feita", !!t.concluida);
+      el.querySelector("input").checked = !!t.concluida;
+      el.querySelector(".t").textContent = t.descricao;
+      el.querySelector(".prazo").textContent = t.prazo || "";
+      if (lista.children[i] !== el) lista.insertBefore(el, lista.children[i] || null);
     });
     ajustarAltura();
+  }
+
+  // Desliza as outras linhas até o novo lugar (FLIP): mede antes, move no DOM, mede depois e anima a diferença.
+  function moverAnimado(el, alvo) {
+    const outros = [...lista.children].filter((c) => c !== el);
+    const antes = new Map(outros.map((c) => [c, c.offsetTop]));
+    lista.insertBefore(el, alvo);
+    if (semMovimento) return;
+    for (const c of outros) {
+      const delta = antes.get(c) - c.offsetTop;
+      if (!delta) continue;
+      c.style.transition = "none";
+      c.style.transform = "translateY(" + delta + "px)";
+    }
+    void lista.offsetHeight;
+    for (const c of outros) {
+      if (!c.style.transform) continue;
+      c.style.transition = "transform .2s cubic-bezier(.2, .8, .3, 1)";
+      c.style.transform = "";
+      setTimeout(() => { c.style.transition = ""; }, 230); // devolve as transições de hover ao CSS
+    }
   }
 
   // Arrasto por ponteiro. A captura fica na lista (que nunca muda de lugar): reposicionar a
@@ -79,17 +152,24 @@
     alca.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       const ordemInicial = ids();
+      const deslocamento = e.clientY - el.getBoundingClientRect().top; // onde a linha foi agarrada
+      el.classList.remove("assentando");
       el.classList.add("arrastando");
       try { lista.setPointerCapture(e.pointerId); } catch (_) {}
 
+      // a linha levantada segue o ponteiro: o deslocamento é medido a partir do lugar dela no fluxo
+      const seguir = (y) => {
+        el.style.transform = "none";
+        const topo = el.getBoundingClientRect().top;
+        el.style.transform = "translateY(" + (y - deslocamento - topo) + "px) scale(1.015)";
+      };
+
       const mover = (ev) => {
-        const y = ev.clientY;
+        const y = ev.clientY - lista.getBoundingClientRect().top; // coordenada dentro da lista
         const irmaos = [...lista.children].filter((c) => c !== el);
-        const alvo = irmaos.find((c) => {
-          const r = c.getBoundingClientRect();
-          return y < r.top + r.height / 2;
-        }) || null;
-        if (alvo !== el.nextElementSibling) lista.insertBefore(el, alvo);
+        const alvo = irmaos.find((c) => y < c.offsetTop + c.offsetHeight / 2) || null;
+        if (alvo !== el.nextElementSibling) moverAnimado(el, alvo);
+        seguir(ev.clientY);
       };
       const soltar = () => {
         lista.removeEventListener("pointermove", mover);
@@ -97,9 +177,13 @@
         lista.removeEventListener("pointercancel", soltar);
         lista.removeEventListener("lostpointercapture", soltar);
         el.classList.remove("arrastando");
+        el.classList.add("assentando");
+        el.style.transform = "";
+        setTimeout(() => el.classList.remove("assentando"), 260);
         const nova = ids();
         if (nova.join() !== ordemInicial.join()) enviar("ordem", { ordem: nova });
       };
+      seguir(e.clientY);
       lista.addEventListener("pointermove", mover);
       lista.addEventListener("pointerup", soltar);
       lista.addEventListener("pointercancel", soltar);

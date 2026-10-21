@@ -108,35 +108,53 @@ div[class*="st-key-home_card"] {
     box-shadow: var(--glass-shadow);
     transition: border-color .2s, box-shadow .2s;
 }
+div[class*="st-key-meta_card"] {
+    --neon: 180, 76, 255;
+    border-bottom-color: rgba(var(--neon), .7);
+    box-shadow: var(--glass-shadow), 0 10px 22px -14px rgba(var(--neon), .7);
+    transition: border-color .25s, box-shadow .25s;
+}
 div[class*="st-key-meta_card"]:hover {
-    border-color: rgba(180, 76, 255, 0.55);
-    box-shadow: 0 0 18px rgba(180, 76, 255, 0.18);
+    border-color: rgba(var(--neon), .5);
+    box-shadow: var(--glass-shadow), 0 0 22px -4px rgba(var(--neon), .38);
 }
 
 .atlas-title { font-size: 1.9rem; font-weight: 600; margin-bottom: .2rem; }
 .atlas-sub { color: var(--atlas-text-dim); margin-bottom: 1.2rem; }
 
-.meta-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
-.meta-title .badge { margin-left: .6rem; vertical-align: middle; }
-.cat-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .1rem 0 .5rem; }
-.cat-chip {
-    display: inline-block; padding: .12rem .65rem; border-radius: 999px;
-    font-size: .76rem; font-weight: 600; line-height: 1.5;
+/* cabeçalho do cartão: título e etiquetas à esquerda, grupo de ações à direita */
+div[class*="st-key-meta_head"] { flex-wrap: nowrap; align-items: flex-start; gap: 1rem; margin-bottom: .75rem; }
+.meta-title { font-size: 1.2rem; font-weight: 600; line-height: 1.4; margin: 0 0 .5rem 0; overflow-wrap: anywhere; }
+.meta-title .badge { margin-left: .65rem; vertical-align: middle; }
+/* status (ao lado do título) e categorias (linha própria): mesma altura, raio e tipografia */
+.badge, .cat-chip {
+    display: inline-flex; align-items: center; box-sizing: border-box;
+    height: 1.5rem; padding: 0 .75rem; border-radius: 999px;
+    font-size: .74rem; font-weight: 600; line-height: 1; white-space: nowrap;
 }
+.cat-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; }
 .cat-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
-.meta-desc { color: var(--atlas-text-dim); font-size: .92rem; margin: .1rem 0 .6rem 0; }
-.badge {
-    display: inline-block; padding: .12rem .65rem; border-radius: 999px;
-    font-size: .74rem; font-weight: 500; margin-right: .4rem;
-    border: 1px solid var(--atlas-border); color: #d6d6e0;
-}
-.badge.alta { border-color: #ff4d8d; color: #ff7aa8; }
-.badge.media { border-color: var(--atlas-purple); color: #d39bff; }
-.badge.baixa { border-color: #4dd2c1; color: #7fe3d6; }
+.meta-desc { color: var(--atlas-text-dim); font-size: .92rem; line-height: 1.45; margin: .45rem 0 .9rem 0; }
+.badge { border: 1px solid var(--atlas-border); color: #d6d6e0; }
+.badge::before { content: ""; width: 6px; height: 6px; margin-right: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
 .badge.status-ativa { background: var(--atlas-purple-soft); border-color: transparent; color: #d39bff; }
 .badge.status-concluida { background: rgba(77, 210, 193, .12); border-color: transparent; color: #7fe3d6; }
 .badge.status-arquivada { background: #23232d; border-color: transparent; color: var(--atlas-text-dim); }
 .badge.status-atrasada { background: rgba(255, 77, 77, .12); border-color: transparent; color: #ff7a7a; }
+
+div[class*="st-key-meta_actions"] { flex-wrap: nowrap; flex-shrink: 0; }
+div[class*="st-key-meta_actions"] button {
+    width: 2.2rem; height: 2.2rem; min-height: 0; padding: 0; border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;
+    transition: background .2s, border-color .2s, color .2s;
+}
+div[class*="st-key-meta_actions"] button:hover {
+    background: var(--atlas-purple-soft); border-color: rgba(180, 76, 255, 0.45); color: #fff;
+}
+div[class*="st-key-meta_actions"] button [data-testid="stIconMaterial"] { font-size: 1.15rem; }
+div[class*="st-key-meta_actions"] button[aria-label="Excluir"]:hover {
+    background: rgba(255, 77, 77, 0.12); border-color: rgba(255, 77, 77, 0.45); color: #ff7a7a;
+}
 
 /* ---------- Painéis de métricas ---------- */
 div[class*="st-key-meta_panel"] {
@@ -170,9 +188,13 @@ div[class*="st-key-meta_panel_ativas"] .panel-head > span:first-child { color: #
 div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color: #ff7a7a; }
 
 /* ---------- Progresso do cartão ---------- */
-.meta-info { color: var(--atlas-text-dim); font-size: .88rem; margin-bottom: .9rem; }
-.meta-info .material-icon { margin-left: 1.1rem; }
-.meta-info .material-icon:first-child { margin-left: 0; }
+.meta-info { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; color: var(--atlas-text-dim); font-size: .88rem; margin: .45rem 0 1rem 0; }
+.meta-info .material-icon { font-size: 1.05rem; margin-right: .45rem; }
+.meta-item { display: inline-flex; align-items: center; }
+.meta-item.late, .meta-item.late .material-icon { color: #ff7a7a; }
+.meta-item.prio-alta, .meta-item.prio-alta .material-icon { color: #ff7aa8; }
+.meta-item.prio-media, .meta-item.prio-media .material-icon { color: #d39bff; }
+.meta-item.prio-baixa, .meta-item.prio-baixa .material-icon { color: #7fe3d6; }
 .prog-head { display: flex; justify-content: space-between; font-size: .8rem; margin-bottom: .3rem; }
 .prog-track { height: 8px; border-radius: 999px; background: #2b2b37; overflow: hidden; }
 /* a animação enche a barra do zero ao carregar; a transição anima mudanças depois */
@@ -186,12 +208,153 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 }
 .prog-foot { color: var(--atlas-text-dim); font-size: .78rem; margin-top: .3rem; padding-bottom: .5rem; }
 
+/* o iframe do checklist tem folga interna (para a linha levantada não ser cortada); a margem lateral negativa a compensa */
+iframe[title*="checklist_sortable"] { display: block; width: calc(100% + 24px); max-width: none; margin: 0 -12px; }
+
 /* botão que abre/fecha o checklist */
+div[class*="st-key-toggle_check"] { border-top: 1px solid var(--glass-border); padding-top: .15rem; }
 div[class*="st-key-toggle_check"] button {
-    justify-content: flex-start;
-    border: none; background: transparent; color: #c9c9d6; padding-left: 0;
+    width: 100%; min-height: 0; padding: .35rem .1rem; border: none; border-radius: 8px;
+    background: transparent; color: #c9c9d6; font-size: .88rem;
+    transition: color .2s, background .2s;
 }
-div[class*="st-key-toggle_check"] button:hover { color: #fff; background: transparent; }
+div[class*="st-key-toggle_check"] button > div,
+div[class*="st-key-toggle_check"] button span[data-has-shortcut] { justify-content: flex-start; width: 100%; }
+div[class*="st-key-toggle_check"] button:hover { color: #fff; background: rgba(255, 255, 255, 0.03); }
+
+/* ---------- Barra de busca + filtro de categorias ---------- */
+div[class*="st-key-busca_barra"] {
+    flex-wrap: nowrap; align-items: center; gap: 0;
+    min-height: 3.1rem; padding: .2rem .45rem .2rem 1.15rem; margin-bottom: .2rem;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    box-shadow: var(--glass-shadow);
+    transition: border-color .2s, box-shadow .2s;
+}
+div[class*="st-key-busca_barra"]:hover { border-color: rgba(180, 76, 255, 0.35); }
+div[class*="st-key-busca_barra"]:focus-within {
+    border-color: rgba(180, 76, 255, 0.65);
+    box-shadow: var(--glass-shadow), 0 0 0 3px rgba(180, 76, 255, 0.14);
+}
+div[class*="st-key-busca_barra"] p { margin: 0; }
+.busca-lupa { display: block; color: var(--atlas-text-dim); font-size: 1.3rem; line-height: 1; margin: 0 .55rem 0 0; }
+/* só o ícone da lupa (markdown direto na barra); o texto do botão de categorias não entra aqui */
+div[class*="st-key-busca_barra"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-busca_barra"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] p { line-height: 1; }
+/* o campo perde a moldura própria: a pílula é a moldura */
+div[class*="st-key-w_busca_metas"] [data-testid="stTextInputRootElement"] {
+    border: none; background: transparent; box-shadow: none;
+}
+div[class*="st-key-w_busca_metas"] input { background: transparent; padding-left: 0; }
+div[class*="st-key-busca_limpar"] button {
+    width: 2rem; height: 2rem; min-height: 0; padding: 0; border-radius: 50%;
+    color: var(--atlas-text-dim);
+}
+div[class*="st-key-busca_limpar"] button:hover { color: #fff; background: var(--atlas-purple-soft); }
+/* botão de categorias: parte da pílula, separado por um divisor fino */
+div[class*="st-key-busca_categorias"] {
+    border-left: 1px solid var(--glass-border); padding-left: .45rem; margin-left: .45rem;
+}
+div[class*="st-key-busca_categorias"] button {
+    border: none; background: transparent; color: #c9c9d6; border-radius: 999px; font-weight: 500;
+    transition: background .2s, color .2s;
+}
+div[class*="st-key-busca_categorias"] button:hover,
+div[class*="st-key-busca_categorias"] button[aria-expanded="true"] {
+    background: var(--atlas-purple-soft); color: #fff;
+}
+
+/* categorias marcadas no filtro: linha de altura fixa (não desloca a página), chips menores com x */
+div[class*="st-key-flt_chips"] { flex-wrap: nowrap; height: 1.9rem; margin: 0 0 .2rem 1rem; overflow: hidden; }
+.flt-vazio { color: var(--atlas-text-dim); font-size: .74rem; opacity: .7; }
+div[class*="st-key-flt_chip_"] button, div[class*="st-key-dlg_chip_"] button {
+    min-height: 0; height: 1.4rem; padding: 0 .45rem 0 .65rem; border: none; border-radius: 999px;
+    font-size: .7rem; font-weight: 600; transition: filter .2s;
+}
+div[class*="st-key-flt_chip_"] button span[data-has-shortcut], div[class*="st-key-dlg_chip_"] button span[data-has-shortcut] { flex-direction: row-reverse; gap: .25rem; }
+div[class*="st-key-flt_chip_"] button:hover, div[class*="st-key-dlg_chip_"] button:hover { filter: brightness(1.12); }
+div[class*="st-key-flt_chip_"] button [data-testid="stIconMaterial"], div[class*="st-key-dlg_chip_"] button [data-testid="stIconMaterial"] { font-size: .85rem; opacity: .75; }
+div[class*="st-key-flt_limpar_tudo"] button { min-height: 0; height: 1.4rem; color: var(--atlas-text-dim); font-size: .72rem; }
+div[class*="st-key-flt_limpar_tudo"] button:hover { color: #fff; background: transparent; }
+
+/* ---------- Diálogo de meta ---------- */
+div[data-testid="stDialog"] div[role="dialog"] {
+    background: rgba(20, 18, 31, 0.94);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 44px -14px rgba(180, 76, 255, 0.45);
+}
+/* seções: ícone + rótulo pequeno em caixa alta, com um filete embaixo */
+.dlg-sec {
+    display: flex; align-items: center; gap: .5rem;
+    margin: 1.2rem 0 .3rem; padding-bottom: .5rem; border-bottom: 1px solid var(--glass-border);
+    font-size: .72rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #d39bff;
+}
+.dlg-sec .material-icon { margin: 0; font-size: 1.1rem; }
+.dlg-rodape-linha { height: 1px; margin-top: .6rem; background: var(--glass-border); }
+
+/* categorias no diálogo: campo com os chips marcados e o "Adicionar" tracejado no fim */
+div[class*="st-key-dlg_cat_campo"] {
+    flex-wrap: wrap; min-height: 2.8rem; padding: .45rem .75rem; gap: .4rem;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: .6rem;
+    transition: border-color .2s;
+}
+div[class*="st-key-dlg_cat_campo"]:hover { border-color: rgba(180, 76, 255, 0.4); }
+div[class*="st-key-dlg_cat_campo"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-dlg_cat_campo"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+/* o wrapper do popover tinha ~3,6 px a mais embaixo do botão (linha em linha): flex tira essa folga */
+div[class*="st-key-dlg_cat_add"], div[class*="st-key-dlg_cat_add"] [data-testid="stPopover"],
+div[class*="st-key-dlg_cat_add"] [data-testid="stPopover"] > div { display: flex; align-items: center; }
+div[class*="st-key-dlg_chip_"] button { height: 1.5rem; }
+div[class*="st-key-dlg_cat_add"] button {
+    min-height: 0; height: 1.5rem; padding: 0 .75rem 0 .5rem; border-radius: 999px;
+    border: 1px dashed rgba(180, 76, 255, 0.6); background: transparent; color: #d39bff;
+    font-size: .74rem; font-weight: 600; transition: background .2s, color .2s;
+}
+div[class*="st-key-dlg_cat_add"] button:hover { background: var(--atlas-purple-soft); color: #fff; }
+
+/* tarefas do diálogo: linhas de vidro com prazo discreto e lixeira que acende no hover */
+div[class*="st-key-dlg_tarefa_"] {
+    flex-wrap: nowrap; padding: .3rem .4rem .3rem .9rem; margin-bottom: .1rem;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid var(--glass-border); border-radius: 10px;
+    transition: border-color .2s, background .2s;
+}
+div[class*="st-key-dlg_tarefa_"]:hover { border-color: rgba(180, 76, 255, 0.4); background: rgba(180, 76, 255, 0.05); }
+div[class*="st-key-dlg_tarefa_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-dlg_tarefa_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+.tarefa-linha { display: flex; align-items: center; justify-content: space-between; gap: .8rem; font-size: .92rem; }
+.tarefa-prazo { flex: none; color: var(--atlas-text-dim); font-size: .76rem; }
+div[class*="st-key-dlg_del_"] button {
+    width: 1.9rem; height: 1.9rem; min-height: 0; padding: 0; border: none; background: transparent;
+    color: var(--atlas-text-dim); transition: color .2s, background .2s;
+}
+div[class*="st-key-dlg_del_"] button:hover { color: #ff7a7a; background: rgba(255, 77, 77, 0.12); }
+
+/* nova tarefa: pílula com "+" à esquerda, descrição e prazo */
+div[class*="st-key-dlg_nova_tarefa"] {
+    flex-wrap: nowrap; padding: .2rem .5rem .2rem .3rem; gap: .3rem;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 999px;
+    transition: border-color .2s, box-shadow .2s;
+}
+div[class*="st-key-dlg_nova_tarefa"]:focus-within {
+    border-color: rgba(180, 76, 255, 0.6); box-shadow: 0 0 0 3px rgba(180, 76, 255, 0.12);
+}
+div[class*="st-key-dlg_nova_tarefa"] [data-testid="stFormSubmitButton"] button {
+    width: 2rem; height: 2rem; min-height: 0; padding: 0; border-radius: 50%;
+    background: var(--atlas-purple-soft); border: 1px solid rgba(180, 76, 255, 0.4); color: #d39bff;
+    transition: background .2s, color .2s;
+}
+div[class*="st-key-dlg_nova_tarefa"] [data-testid="stFormSubmitButton"] button:hover { background: var(--atlas-purple); color: #fff; }
+div[class*="st-key-dlg_nova_tarefa"] [data-testid="stTextInputRootElement"],
+div[class*="st-key-dlg_nova_tarefa"] [data-testid="stDateInputField"],
+div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="input"],
+div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="base-input"] { border: none; background: transparent; box-shadow: none; }
+div[class*="st-key-dlg_nova_tarefa"] input { background: transparent; }
 
 /* ---------- Início ---------- */
 /* sai da coluna central e fica no canto superior esquerdo da área principal */

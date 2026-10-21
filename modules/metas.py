@@ -18,6 +18,17 @@ VISOES_NOME = {
     "sem_prazo": "Sem prazo", "todas": "Todas", "arquivadas": "Arquivadas",
 }
 
+FOCAR_NOVA_TAREFA = """<script>
+(function () {
+    let tentativas = 0;
+    const timer = setInterval(() => {
+        const campo = document.querySelector('[class*="st-key-dlg_nova_tarefa"] input[type="text"]');
+        if (campo) { campo.focus(); clearInterval(timer); }
+        else if (++tentativas > 30) clearInterval(timer);
+    }, 50);
+})();
+</script>"""
+
 COR_PADRAO_CATEGORIA = "#b44cff"
 COR_GERAL = "#8d8d9c"  # categoria do sistema, sempre disponível
 NOME_CATEGORIA_MAX = 30
@@ -62,43 +73,9 @@ def _filtrar_por_categorias(metas, categoria_ids):
     return [m for m in metas if ids & {c["id"] for c in m["categorias"]}]
 
 
-def _bolinhas(categorias):
-    return "".join(f'<span class="cat-dot" style="background:{c["cor"]}"></span>' for c in categorias)
-
-
-def _campo_busca():
-    """Busca por título e descrição, com um X discreto para limpar. O texto fica em session_state
-    para sobreviver à troca de módulo."""
-    def guardar():
-        st.session_state.busca_metas = st.session_state.w_busca_metas
-
-    def limpar():
-        st.session_state.busca_metas = ""
-        st.session_state.w_busca_metas = ""
-
-    if "w_busca_metas" not in st.session_state:
-        st.session_state.w_busca_metas = st.session_state.get("busca_metas", "")
-    campo, x = st.columns([30, 1], vertical_alignment="center")
-    texto = campo.text_input(
-        "Buscar metas", key="w_busca_metas", on_change=guardar, placeholder="Buscar metas por título ou descrição",
-        label_visibility="collapsed",
-    )
-    x.button("", icon=":material/close:", type="tertiary", help="Limpar busca", key="busca_limpar",
-             on_click=limpar, disabled=not texto)
-    return texto
-
-
-def _filtro_categorias(categorias):
+def _popover_categorias(categorias, selecionadas, ativas):
     """Botão de filtro por categorias (popover). 'Geral' é a categoria do sistema: fica ativa enquanto
-    nenhuma outra estiver marcada. Marcar uma categoria desliga 'Geral'; marcar 'Geral' desmarca as outras.
-
-    A seleção fica em session_state para sobreviver à troca de módulo. Devolve os ids marcados
-    que ainda existem no catálogo.
-    """
-    selecionadas = st.session_state.setdefault("filtro_categorias", set())
-    selecionadas.intersection_update(c["id"] for c in categorias)  # categoria excluída sai do filtro
-    ativas = set(selecionadas)
-
+    nenhuma outra estiver marcada. Marcar uma categoria desliga 'Geral'; marcar 'Geral' desmarca as outras."""
     def limpar():
         selecionadas.clear()
 
@@ -109,7 +86,8 @@ def _filtro_categorias(categorias):
     def marcar(categoria_id):
         (selecionadas.add if st.session_state[f"flt_cat_{categoria_id}"] else selecionadas.discard)(categoria_id)
 
-    with st.popover("Categorias", icon=":material/label:"):
+    rotulo = f"Categorias · {len(ativas)}" if ativas else "Categorias"
+    with st.popover(rotulo, icon=":material/label:", key="busca_categorias"):
         # Os checkboxes são sempre definidos a partir da seleção guardada; os callbacks só a atualizam.
         st.session_state.flt_geral = not ativas
         p0, c1 = st.columns([1, 8], vertical_alignment="center")
@@ -123,10 +101,58 @@ def _filtro_categorias(categorias):
             c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"],))
         st.button("Limpar", disabled=not ativas, use_container_width=True, key="flt_limpar", on_click=limpar)
 
-    marcadas = [c for c in categorias if c["id"] in ativas]
-    if marcadas:
-        st.markdown(_bolinhas(marcadas), unsafe_allow_html=True)
-    return ativas
+
+def _chips_filtro(marcadas, selecionadas):
+    """Categorias marcadas no filtro, em chips coloridos com x para remover.
+
+    A linha tem altura fixa (CSS) e existe mesmo sem seleção, para a página não se deslocar ao marcar."""
+    # a cor de cada chip vem do CSS por chave: o botão do Streamlit não aceita estilo próprio
+    st.html("<style>" + "".join(
+        f'.st-key-flt_chip_{c["id"]} button{{background:{c["cor"]};color:{_cor_texto(c["cor"])}}}' for c in marcadas
+    ) + "</style>")
+    with st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key="flt_chips"):
+        if not marcadas:
+            st.html('<span class="flt-vazio">Todas as categorias</span>')
+            return
+        for c in marcadas:
+            st.button(
+                c["nome"], icon=":material/close:", key=f"flt_chip_{c['id']}", help="Remover do filtro",
+                on_click=selecionadas.discard, args=(c["id"],),
+            )
+        st.button("Limpar tudo", type="tertiary", key="flt_limpar_tudo", on_click=selecionadas.clear)
+
+
+def _barra_busca(categorias):
+    """Pílula única de busca + filtro por categorias: lupa, campo, X para limpar (só com texto) e o botão
+    de categorias no mesmo contêiner. Devolve (texto, ids das categorias marcadas).
+
+    O texto e a seleção ficam em session_state para sobreviver à troca de módulo. A seleção só mantém
+    categorias que ainda existem no catálogo."""
+    def guardar():
+        st.session_state.busca_metas = st.session_state.w_busca_metas
+
+    def limpar():
+        st.session_state.busca_metas = ""
+        st.session_state.w_busca_metas = ""
+
+    if "w_busca_metas" not in st.session_state:
+        st.session_state.w_busca_metas = st.session_state.get("busca_metas", "")
+    selecionadas = st.session_state.setdefault("filtro_categorias", set())
+    selecionadas.intersection_update(c["id"] for c in categorias)  # categoria excluída sai do filtro
+    ativas = set(selecionadas)
+
+    with st.container(horizontal=True, vertical_alignment="center", gap=None, key="busca_barra"):
+        st.markdown('<span class="material-icon busca-lupa">search</span>', unsafe_allow_html=True)
+        texto = st.text_input(
+            "Buscar metas", key="w_busca_metas", on_change=guardar, placeholder="Buscar metas por título ou descrição",
+            label_visibility="collapsed", width="stretch",
+        )
+        if texto:
+            st.button("", icon=":material/close:", type="tertiary", help="Limpar busca", key="busca_limpar", on_click=limpar)
+        _popover_categorias(categorias, selecionadas, ativas)
+
+    _chips_filtro([c for c in categorias if c["id"] in ativas], selecionadas)
+    return texto, ativas
 
 
 def _fmt_data(d):
@@ -219,31 +245,49 @@ def _abrir_dialogo(meta=None, tarefas=()):
     _dialogo_meta()
 
 
+def _secao(icone, titulo):
+    """Título de seção do diálogo: ícone + rótulo pequeno em caixa alta."""
+    st.markdown(
+        f'<div class="dlg-sec"><span class="material-icon">{icone}</span>{titulo}</div>', unsafe_allow_html=True,
+    )
+
+
 def _editor_tarefas(dlg):
     tarefas = dlg["tarefas"]
-    st.markdown("**Tarefas**")
-    if tarefas:
-        for t in tarefas:
-            c1, c2 = st.columns([12, 1], vertical_alignment="center")
-            prazo = f"  ·  {_fmt_data(t['prazo'])}" if t["prazo"] else ""
-            c1.markdown(f"{t['descricao']}<span style='color:#8d8d9c'>{prazo}</span>", unsafe_allow_html=True)
-            if c2.button("", icon=":material/delete:", help="Excluir tarefa", key=f"dlg_del_{dlg['nonce']}_{t['uid']}"):
+    n = dlg["nonce"]
+    for t in tarefas:
+        with st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key=f"dlg_tarefa_{n}_{t['uid']}"):
+            prazo = f'<span class="tarefa-prazo">{_fmt_data(t["prazo"])}</span>' if t["prazo"] else ""
+            st.markdown(f'<div class="tarefa-linha"><span>{escape(t["descricao"])}</span>{prazo}</div>',
+                        unsafe_allow_html=True, width="stretch")
+            if st.button("", icon=":material/delete:", help="Excluir tarefa", key=f"dlg_del_{n}_{t['uid']}"):
                 dlg["tarefas"] = [x for x in tarefas if x["uid"] != t["uid"]]
                 st.rerun(scope="fragment")
-    else:
+    if not tarefas:
         st.caption("Nenhuma tarefa ainda.")
 
-    with st.form(f"dlg_nova_tarefa_{dlg['nonce']}_{dlg['proximo_uid']}", border=False):
-        c1, c2, c3 = st.columns([5, 3, 1], vertical_alignment="bottom")
-        descricao = c1.text_input("Nova tarefa", placeholder="Nova tarefa...")
-        prazo = c2.date_input("Prazo da tarefa (opcional)", value=None, format="DD/MM/YYYY")
-        if c3.form_submit_button("", icon=":material/add:", help="Adicionar tarefa", use_container_width=True):
-            if descricao.strip():
-                dlg["tarefas"].append(
-                    {"uid": dlg["proximo_uid"], "id": None, "descricao": descricao.strip(), "prazo": prazo}
-                )
-                dlg["proximo_uid"] += 1
-                st.rerun(scope="fragment")
+    # Linha única em pílula: "+" à esquerda, descrição e prazo. Enter no campo também adiciona.
+    with st.form(f"dlg_nova_tarefa_{n}_{dlg['proximo_uid']}", border=False):
+        with st.container(horizontal=True, vertical_alignment="center", gap=None, key="dlg_nova_tarefa"):
+            adicionar = st.form_submit_button("", icon=":material/add:", help="Adicionar tarefa")
+            descricao = st.text_input(
+                "Nova tarefa", placeholder="Nova tarefa...", label_visibility="collapsed", width="stretch",
+            )
+            prazo = st.date_input(
+                "Prazo da tarefa (opcional)", value=None, format="DD/MM/YYYY", label_visibility="collapsed",
+                help="Prazo da tarefa (opcional)", width=170,
+            )
+        if adicionar and descricao.strip():
+            dlg["tarefas"].append(
+                {"uid": dlg["proximo_uid"], "id": None, "descricao": descricao.strip(), "prazo": prazo}
+            )
+            dlg["proximo_uid"] += 1
+            dlg["focar_tarefa"] = True
+            st.rerun(scope="fragment")
+
+    # Depois de adicionar, o cursor volta ao campo (que é recriado a cada tarefa) para digitar a próxima.
+    if dlg.pop("focar_tarefa", False):
+        st.html(FOCAR_NOVA_TAREFA, unsafe_allow_javascript=True)
 
 
 def _form_categoria(dlg, categoria=None):
@@ -278,14 +322,32 @@ def _form_categoria(dlg, categoria=None):
 
 
 def _seletor_categorias(dlg):
-    """Botão 'Categorias' (popover estilo Trello): marcar, criar, editar e excluir categorias."""
+    """Campo de categorias (popover estilo Trello): marcar, criar, editar e excluir categorias."""
     n = dlg["nonce"]
     categorias = repo.listar_categorias()
     selecionadas = dlg["categorias"]
     modo = dlg["cat_modo"]
     por_id = {c["id"]: c for c in categorias}
 
-    with st.popover("Categorias", icon=":material/label:"):
+    def marcar(categoria_id, chave):
+        (selecionadas.add if st.session_state[chave] else selecionadas.discard)(categoria_id)
+
+    # Campo no estilo dos demais: um chip com x por categoria marcada e o botão "Adicionar" (popover)
+    # logo depois do último. Os checkboxes do popover só atualizam a seleção por callback, então a
+    # seleção já está em dia quando os chips são desenhados.
+    marcadas = [c for c in categorias if c["id"] in selecionadas]
+    st.html("<style>" + "".join(
+        f'.st-key-dlg_chip_{n}_{c["id"]} button{{background:{c["cor"]};color:{_cor_texto(c["cor"])}}}'
+        for c in marcadas
+    ) + "</style>")
+    campo = st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key="dlg_cat_campo")
+    with campo:
+        for c in marcadas:
+            st.button(
+                c["nome"], icon=":material/close:", key=f"dlg_chip_{n}_{c['id']}", help="Remover categoria",
+                on_click=selecionadas.discard, args=(c["id"],),
+            )
+    with campo, st.popover("Adicionar", icon=":material/add:", key="dlg_cat_add"):
         if modo == "nova":
             _form_categoria(dlg)
         elif isinstance(modo, tuple) and modo[1] in por_id:
@@ -311,10 +373,9 @@ def _seletor_categorias(dlg):
             for c in categorias:
                 p0, c1, c2, c3 = st.columns([1, 8, 1, 1], vertical_alignment="center")
                 p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
-                marcada = c1.checkbox(
-                    c["nome"], value=c["id"] in selecionadas, key=f"cat_chk_{n}_{c['id']}",
-                )
-                (selecionadas.add if marcada else selecionadas.discard)(c["id"])
+                chave = f"cat_chk_{n}_{c['id']}"
+                st.session_state[chave] = c["id"] in selecionadas
+                c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"], chave))
                 if c2.button("", icon=":material/edit:", help="Editar categoria", key=f"cat_ed_{n}_{c['id']}"):
                     dlg["cat_modo"] = ("editar", c["id"])
                     st.rerun(scope="fragment")
@@ -325,10 +386,6 @@ def _seletor_categorias(dlg):
                 dlg["cat_modo"] = "nova"
                 st.rerun(scope="fragment")
 
-    marcadas = [c for c in categorias if c["id"] in selecionadas]
-    if marcadas:
-        st.markdown(_chips(marcadas), unsafe_allow_html=True)
-
 
 @st.dialog("Meta", width="large")
 def _dialogo_meta():
@@ -336,6 +393,7 @@ def _dialogo_meta():
     meta = dlg["meta"]
     n = dlg["nonce"]
 
+    _secao("edit_note", "Detalhes")
     titulo = st.text_input("Título", value=meta["titulo"] if meta else "", max_chars=150, key=f"dlg_titulo_{n}")
     descricao = st.text_area("Descrição", value=(meta["descricao"] or "") if meta else "", key=f"dlg_desc_{n}")
     col1, col2 = st.columns(2)
@@ -348,11 +406,17 @@ def _dialogo_meta():
         "Prazo (opcional)", value=meta["prazo"] if meta else None, format="DD/MM/YYYY", key=f"dlg_prazo_{n}",
     )
 
+    _secao("label", "Categorias")
     _seletor_categorias(dlg)
 
+    _secao("checklist", "Tarefas")
     _editor_tarefas(dlg)
 
-    if st.button("Salvar", type="primary", use_container_width=True, key=f"dlg_salvar_{n}"):
+    st.html('<div class="dlg-rodape-linha"></div>')
+    cancelar, salvar = st.columns(2)
+    if cancelar.button("Cancelar", use_container_width=True, key=f"dlg_cancelar_{n}"):
+        st.rerun()
+    if salvar.button("Salvar", type="primary", use_container_width=True, key=f"dlg_salvar_{n}"):
         if not titulo.strip():
             st.error("O título é obrigatório.")
             return
@@ -402,49 +466,51 @@ def _checklist(meta_id, tarefas):
     st.rerun()
 
 
+def _acoes(meta, tarefas):
+    """Grupo compacto de ações do cartão: editar, concluir/reativar, arquivar e excluir."""
+    with st.container(horizontal=True, gap="xsmall", width="content", key=f"meta_actions_{meta['id']}"):
+        if st.button("", icon=":material/edit:", key=f"edit_{meta['id']}", help="Editar"):
+            _abrir_dialogo(meta, tarefas)
+        if meta["status"] == "ativa":
+            if st.button("", icon=":material/check:", key=f"conc_{meta['id']}", help="Concluir meta"):
+                repo.definir_status(meta["id"], "concluida")
+                st.rerun()
+            if st.button("", icon=":material/inventory_2:", key=f"arq_{meta['id']}", help="Arquivar"):
+                repo.definir_status(meta["id"], "arquivada")
+                st.rerun()
+        elif st.button("", icon=":material/replay:", key=f"reat_{meta['id']}", help="Reativar"):
+            repo.definir_status(meta["id"], "ativa")
+            st.rerun()
+        if st.button("", icon=":material/delete:", key=f"del_{meta['id']}", help="Excluir"):
+            _pedir_exclusao(meta["id"], meta["titulo"])
+
+
 def _cartao(meta, tarefas, hoje):
     total = len(tarefas)
     feitas = sum(1 for t in tarefas if t["concluida"])
     pct = round(feitas / total * 100) if total else 0
 
     categoria = _categoria(meta, hoje)
+    atrasada = categoria == "atrasada"
 
     with st.container(border=True, key=f"meta_card_{meta['id']}"):
-        topo, acoes = st.columns([5, 3], vertical_alignment="top")
-        with topo:
+        with st.container(horizontal=True, vertical_alignment="top", key=f"meta_head_{meta['id']}"):
             st.markdown(
-                f'<p class="meta-title">{meta["titulo"]}'
-                f'<span class="badge status-{categoria}">{STATUS[categoria]}</span>'
-                f'<span class="badge {meta["prioridade"]}">{PRIORIDADES[meta["prioridade"]]}</span></p>',
-                unsafe_allow_html=True,
+                f'<p class="meta-title">{escape(meta["titulo"])}'
+                f'<span class="badge status-{categoria}">{STATUS[categoria]}</span></p>{_chips(meta["categorias"])}',
+                unsafe_allow_html=True, width="stretch",
             )
-        with acoes:
-            b1, b2, b3, b4 = st.columns(4)
-            if b1.button("", icon=":material/edit:", key=f"edit_{meta['id']}", help="Editar", use_container_width=True):
-                _abrir_dialogo(meta, tarefas)
-            if meta["status"] == "ativa":
-                if b2.button("", icon=":material/check:", key=f"conc_{meta['id']}", help="Concluir meta", use_container_width=True):
-                    repo.definir_status(meta["id"], "concluida")
-                    st.rerun()
-                if b3.button("", icon=":material/inventory_2:", key=f"arq_{meta['id']}", help="Arquivar", use_container_width=True):
-                    repo.definir_status(meta["id"], "arquivada")
-                    st.rerun()
-            elif b2.button("", icon=":material/replay:", key=f"reat_{meta['id']}", help="Reativar", use_container_width=True):
-                repo.definir_status(meta["id"], "ativa")
-                st.rerun()
-            if b4.button("", icon=":material/delete:", key=f"del_{meta['id']}", help="Excluir", use_container_width=True):
-                _pedir_exclusao(meta["id"], meta["titulo"])
+            _acoes(meta, tarefas)
 
-        if meta["categorias"]:
-            st.markdown(_chips(meta["categorias"]), unsafe_allow_html=True)
-
-        if meta["descricao"]:
-            st.markdown(f'<p class="meta-desc">{meta["descricao"]}</p>', unsafe_allow_html=True)
-
+        descricao = f'<p class="meta-desc">{escape(meta["descricao"])}</p>' if meta["descricao"] else ""
         st.markdown(
-            f'<div class="meta-info">'
-            f'<span class="material-icon">calendar_today</span>Prazo: {_fmt_data(meta["prazo"])}'
-            f'<span class="material-icon">task_alt</span>{feitas} / {total} tarefas</div>'
+            descricao
+            + '<div class="meta-info">'
+            f'<span class="meta-item{" late" if atrasada else ""}">'
+            f'<span class="material-icon">{"event_busy" if atrasada else "calendar_today"}</span>'
+            f'Prazo: {_fmt_data(meta["prazo"])}</span>'
+            f'<span class="meta-item prio-{meta["prioridade"]}">'
+            f'<span class="material-icon">flag</span>Prioridade {PRIORIDADES[meta["prioridade"]]}</span></div>'
             f'<div class="prog-head"><span>Tarefas</span><b>{feitas} / {total}</b></div>'
             f'<div class="prog-track"><div class="prog-fill" style="width:{pct}%"></div></div>'
             f'<div class="prog-foot">{pct}% concluído</div>',
@@ -455,7 +521,7 @@ def _cartao(meta, tarefas, hoje):
         abertos = st.session_state.setdefault("checklists_abertos", set())
         aberto = meta["id"] in abertos
         if total and st.button(
-            f"Checklist ({feitas}/{total})", key=f"toggle_check_{meta['id']}",
+            f"Checklist ({feitas}/{total})", key=f"toggle_check_{meta['id']}", use_container_width=True,
             icon=":material/expand_less:" if aberto else ":material/expand_more:",
         ):
             abertos.symmetric_difference_update({meta["id"]})
@@ -503,11 +569,7 @@ def render():
          "Precisam de atenção" if r["atrasadas"] else "Nenhuma atrasada"),
     ])
 
-    busca_col, cat_col = st.columns([4, 2], vertical_alignment="center")
-    with busca_col:
-        busca = _campo_busca()
-    with cat_col:
-        selecionadas = _filtro_categorias(categorias)
+    busca, selecionadas = _barra_busca(categorias)
 
     # Busca e categorias valem para a visualização: as contagens do filtro já as consideram.
     base = _filtrar_por_categorias(_filtrar_busca(metas, busca), selecionadas)

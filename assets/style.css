@@ -188,6 +188,8 @@ div[class*="st-key-toggle_check"] button {
 div[class*="st-key-toggle_check"] button:hover { color: #fff; background: transparent; }
 
 /* ---------- Início ---------- */
+.home-clock { color: var(--atlas-text-dim); font-size: .85rem; }
+.home-clock .material-icon { font-size: 1rem; margin-right: .5rem; }
 .home-hero {
     min-height: 62vh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; text-align: center; padding: 1rem 0 2rem;

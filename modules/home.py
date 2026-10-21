@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -71,7 +72,21 @@ _FUTURO = (
 )
 
 
+_MESES = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."]
+
+
+@st.fragment(run_every="30s")
+def _relogio():
+    agora = datetime.now()
+    st.markdown(
+        f'<div class="home-clock"><span class="material-icon">calendar_today</span>'
+        f'{agora.day} de {_MESES[agora.month - 1]} de {agora.year}, {agora:%H:%M}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render():
+    _relogio()
     st.markdown(
         f"""
         <div class="home-hero">

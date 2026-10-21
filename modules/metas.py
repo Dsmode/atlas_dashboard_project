@@ -19,6 +19,7 @@ VISOES_NOME = {
 }
 
 COR_PADRAO_CATEGORIA = "#b44cff"
+COR_GERAL = "#8d8d9c"  # categoria do sistema, sempre disponível
 NOME_CATEGORIA_MAX = 30
 
 
@@ -66,44 +67,57 @@ def _bolinhas(categorias):
 
 
 def _campo_busca():
-    """Busca por título e descrição. O texto fica em session_state para sobreviver à troca de módulo."""
+    """Busca por título e descrição, com um X discreto para limpar. O texto fica em session_state
+    para sobreviver à troca de módulo."""
     def guardar():
         st.session_state.busca_metas = st.session_state.w_busca_metas
 
+    def limpar():
+        st.session_state.busca_metas = ""
+        st.session_state.w_busca_metas = ""
+
     if "w_busca_metas" not in st.session_state:
         st.session_state.w_busca_metas = st.session_state.get("busca_metas", "")
-    return st.text_input(
+    campo, x = st.columns([30, 1], vertical_alignment="center")
+    texto = campo.text_input(
         "Buscar metas", key="w_busca_metas", on_change=guardar, placeholder="Buscar metas por título ou descrição",
         label_visibility="collapsed",
     )
+    x.button("", icon=":material/close:", type="tertiary", help="Limpar busca", key="busca_limpar",
+             on_click=limpar, disabled=not texto)
+    return texto
 
 
 def _filtro_categorias(categorias):
-    """Botão de filtro por categorias (popover). Sem categoria marcada vale 'Geral' (todas as metas).
+    """Botão de filtro por categorias (popover). 'Geral' é a categoria do sistema: fica ativa enquanto
+    nenhuma outra estiver marcada. Marcar uma categoria desliga 'Geral'; marcar 'Geral' desmarca as outras.
 
     A seleção fica em session_state para sobreviver à troca de módulo. Devolve os ids marcados
     que ainda existem no catálogo.
     """
     selecionadas = st.session_state.setdefault("filtro_categorias", set())
-    ativas = selecionadas & {c["id"] for c in categorias}
+    selecionadas.intersection_update(c["id"] for c in categorias)  # categoria excluída sai do filtro
+    ativas = set(selecionadas)
 
     def limpar():
         selecionadas.clear()
-        for c in categorias:
-            st.session_state[f"flt_cat_{c['id']}"] = False
+
+    def clicar_geral():
+        if st.session_state.flt_geral:
+            selecionadas.clear()
 
     def marcar(categoria_id):
         (selecionadas.add if st.session_state[f"flt_cat_{categoria_id}"] else selecionadas.discard)(categoria_id)
 
     with st.popover("Categorias", icon=":material/label:"):
-        st.button(
-            "Geral", type="secondary" if ativas else "primary", use_container_width=True,
-            key="flt_geral", on_click=limpar,
-        )
+        # Os checkboxes são sempre definidos a partir da seleção guardada; os callbacks só a atualizam.
+        st.session_state.flt_geral = not ativas
+        p0, c1 = st.columns([1, 8], vertical_alignment="center")
+        p0.markdown(f'<span class="cat-dot" style="background:{COR_GERAL}"></span>', unsafe_allow_html=True)
+        c1.checkbox("Geral", key="flt_geral", on_change=clicar_geral)
         for c in categorias:
             chave = f"flt_cat_{c['id']}"
-            if chave not in st.session_state:
-                st.session_state[chave] = c["id"] in ativas
+            st.session_state[chave] = c["id"] in ativas
             p0, c1 = st.columns([1, 8], vertical_alignment="center")
             p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
             c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"],))

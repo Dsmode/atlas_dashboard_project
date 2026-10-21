@@ -1,8 +1,8 @@
 from datetime import date, timedelta
 
 import streamlit as st
-from streamlit_sortables import sort_items
 
+from components.checklist_sortable import checklist_sortable
 from database import metas_repo as repo
 
 PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
@@ -10,25 +10,11 @@ PRIORIDADE_ORDEM = {"alta": 0, "media": 1, "baixa": 2}
 STATUS = {"ativa": "Ativa", "concluida": "Concluída", "arquivada": "Arquivada"}
 STATUS_ORDEM = {"ativa": 0, "concluida": 1, "arquivada": 2}
 
-VISOES = ["semana", "mes", "atrasadas", "sem_prazo", "todas", "arquivadas"]
+VISOES = ["todas", "semana", "mes", "atrasadas", "sem_prazo", "arquivadas"]
 VISOES_NOME = {
-    "semana": "Semanal", "mes": "Mensal", "atrasadas": "Atrasadas",
+    "semana": "Semanais", "mes": "Mensais", "atrasadas": "Atrasadas",
     "sem_prazo": "Sem prazo", "todas": "Todas", "arquivadas": "Arquivadas",
 }
-
-# Estilo do componente de arrastar (roda num iframe, então não herda o CSS do app).
-ESTILO_SORTABLE = """
-.sortable-component { background: transparent; border: none; padding: 0; }
-.sortable-container { background: transparent; border: none; }
-.sortable-container-body { background: transparent; }
-.sortable-item {
-    background: #23232d; color: #ececf1; border: 1px solid #2b2b37;
-    border-radius: 10px; font-family: 'Outfit', sans-serif; font-size: 14px;
-    padding: 8px 12px; cursor: grab;
-}
-.sortable-item:hover { border-color: #b44cff; background: #2a2a36; }
-"""
-
 
 def _fmt_data(d):
     return d.strftime("%d/%m/%Y") if d else "sem prazo"
@@ -99,36 +85,17 @@ def _abrir_dialogo(meta=None, tarefas=()):
     _dialogo_meta()
 
 
-def _rotulo(tarefa):
-    """Texto mostrado na lista arrastável. Os caracteres invisíveis ao final tornam únicos
-    rótulos iguais, já que o componente identifica os itens pelo texto."""
-    prazo = f"  ·  {_fmt_data(tarefa['prazo'])}" if tarefa["prazo"] else ""
-    return f"{tarefa['descricao']}{prazo}" + "​" * (tarefa["uid"] + 1)
-
-
 def _editor_tarefas(dlg):
     tarefas = dlg["tarefas"]
     st.markdown("**Tarefas**")
     if tarefas:
-        st.caption("Arraste para mudar a ordem.")
-        por_rotulo = {_rotulo(t): t for t in tarefas}
-        # A chave muda só quando tarefas são adicionadas/removidas, não ao reordenar.
-        chave = f"sort_{dlg['nonce']}_{'-'.join(str(u) for u in sorted(t['uid'] for t in tarefas))}"
-        ordenados = sort_items(list(por_rotulo), direction="vertical", custom_style=ESTILO_SORTABLE, key=chave)
-        # Logo após adicionar/remover, o componente pode devolver a lista antiga por um instante:
-        # só aceita a ordem devolvida se ela tiver exatamente as tarefas atuais.
-        if sorted(ordenados) == sorted(por_rotulo):
-            dlg["tarefas"] = tarefas = [por_rotulo[r] for r in ordenados]
-
-        c1, c2 = st.columns([4, 1], vertical_alignment="bottom")
-        remover = c1.selectbox(
-            "Remover tarefa", tarefas, index=None, placeholder="Escolha a tarefa a remover",
-            format_func=lambda t: t["descricao"], key=f"dlg_rem_{dlg['nonce']}_{len(tarefas)}",
-        )
-        if c2.button("", icon=":material/delete:", help="Remover tarefa", disabled=remover is None,
-                     use_container_width=True, key=f"dlg_rem_btn_{dlg['nonce']}"):
-            dlg["tarefas"] = [t for t in tarefas if t["uid"] != remover["uid"]]
-            st.rerun(scope="fragment")
+        for t in tarefas:
+            c1, c2 = st.columns([12, 1], vertical_alignment="center")
+            prazo = f"  ·  {_fmt_data(t['prazo'])}" if t["prazo"] else ""
+            c1.markdown(f"{t['descricao']}<span style='color:#8d8d9c'>{prazo}</span>", unsafe_allow_html=True)
+            if c2.button("", icon=":material/delete:", help="Excluir tarefa", key=f"dlg_del_{dlg['nonce']}_{t['uid']}"):
+                dlg["tarefas"] = [x for x in tarefas if x["uid"] != t["uid"]]
+                st.rerun(scope="fragment")
     else:
         st.caption("Nenhuma tarefa ainda.")
 
@@ -197,18 +164,22 @@ def _pedir_exclusao(meta_id, nome):
 
 # ---------- cartão da meta ----------
 
-def _alternar_tarefa(tarefa_id):
-    repo.definir_tarefa_concluida(tarefa_id, st.session_state[f"tarefa_{tarefa_id}"])
-
-
-def _checklist(tarefas):
-    for t in tarefas:
-        col_chk, col_prazo = st.columns([6, 2], vertical_alignment="center")
-        col_chk.checkbox(
-            t["descricao"], value=bool(t["concluida"]), key=f"tarefa_{t['id']}",
-            on_change=_alternar_tarefa, args=(t["id"],),
-        )
-        col_prazo.caption(_fmt_data(t["prazo"]) if t["prazo"] else "")
+def _checklist(meta_id, tarefas):
+    """Checklist do cartão: marcar e reordenar. Cada evento do componente grava na hora."""
+    itens = [
+        {"id": t["id"], "descricao": t["descricao"], "prazo": _fmt_data(t["prazo"]) if t["prazo"] else "",
+         "concluida": bool(t["concluida"])}
+        for t in tarefas
+    ]
+    evento = checklist_sortable(itens, key=f"checklist_{meta_id}")
+    if not evento or st.session_state.get(f"chk_evento_{meta_id}") == evento["id"]:
+        return
+    st.session_state[f"chk_evento_{meta_id}"] = evento["id"]
+    if evento["evento"] == "toggle":
+        repo.definir_tarefa_concluida(evento["tarefa_id"], evento["concluida"])
+    else:
+        repo.definir_ordem_tarefas(evento["ordem"])
+    st.rerun()
 
 
 def _cartao(meta, tarefas, hoje):
@@ -259,7 +230,7 @@ def _cartao(meta, tarefas, hoje):
             abertos.symmetric_difference_update({meta["id"]})
             st.rerun()
         if total and aberto:
-            _checklist(tarefas)
+            _checklist(meta["id"], tarefas)
 
 
 # ---------- tela ----------
@@ -278,9 +249,9 @@ def render():
 
     contagem = {v: len(_filtrar(metas, v, hoje)) for v in VISOES}
     visao = st.segmented_control(
-        "Visualização", VISOES, default="semana", key="visao_metas",
+        "Visualização", VISOES, default="todas", key="visao_metas",
         format_func=lambda v: f"{VISOES_NOME[v]} ({contagem[v]})", label_visibility="collapsed",
-    ) or "semana"
+    ) or "todas"
 
     # Estado guardado à parte: widgets perdem o valor ao trocar de módulo.
     st.toggle(

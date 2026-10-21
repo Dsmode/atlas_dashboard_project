@@ -74,3 +74,9 @@ def definir_tarefa_concluida(tarefa_id, concluida):
             "data_conclusao = IF(%s, NOW(), NULL) WHERE id=%s",
             (int(concluida), int(concluida), tarefa_id),
         )
+
+
+def definir_ordem_tarefas(ids_na_ordem):
+    with get_cursor() as cur:
+        for ordem, tarefa_id in enumerate(ids_na_ordem):
+            cur.execute("UPDATE tarefas_meta SET ordem=%s WHERE id=%s", (ordem, tarefa_id))

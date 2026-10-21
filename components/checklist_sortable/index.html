@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { font-family: 'Outfit', 'Source Sans', sans-serif; font-size: 14px; color: #ececf1; }
+  #lista { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+  .item {
+    display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+    background: #23232d; border: 1px solid #2b2b37; border-radius: 10px;
+    user-select: none; -webkit-user-select: none;
+  }
+  .item:hover { border-color: #b44cff; }
+  .item.arrastando { opacity: .85; border-color: #b44cff; background: #2a2a36; box-shadow: 0 4px 14px rgba(0,0,0,.45); position: relative; z-index: 2; }
+  .alca { cursor: grab; color: #8d8d9c; font-size: 18px; line-height: 1; touch-action: none; padding: 0 2px; }
+  .alca:hover { color: #b44cff; }
+  .item.arrastando .alca { cursor: grabbing; }
+  .chk { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; flex: none; margin: 0;
+         border: 1.5px solid #8d8d9c; border-radius: 4px; background: transparent; cursor: pointer; position: relative; }
+  .chk:checked { background: #b44cff; border-color: #b44cff; }
+  .chk:checked::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
+                        border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .item.feita .txt { color: #8d8d9c; text-decoration: line-through; }
+  .prazo { color: #8d8d9c; font-size: 12px; flex: none; }
+</style>
+</head>
+<body>
+<div id="lista"></div>
+<script>
+  const lista = document.getElementById("lista");
+  let contador = 0;
+
+  function enviar(tipo, valor) {
+    contador += 1;
+    window.parent.postMessage({
+      isStreamlitMessage: true, type: "streamlit:setComponentValue", dataType: "json",
+      value: Object.assign({ evento: tipo, id: Date.now() + "-" + contador }, valor),
+    }, "*");
+  }
+  function ajustarAltura() {
+    window.parent.postMessage({
+      isStreamlitMessage: true, type: "streamlit:setFrameHeight",
+      height: lista.getBoundingClientRect().height + 6,
+    }, "*");
+  }
+
+  function desenhar(itens) {
+    lista.innerHTML = "";
+    itens.forEach((t) => {
+      const el = document.createElement("div");
+      el.className = "item" + (t.concluida ? " feita" : "");
+      el.dataset.id = t.id;
+
+      const alca = document.createElement("span");
+      alca.className = "alca"; alca.textContent = "⠿"; alca.title = "Arraste para reordenar";
+      const chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "chk"; chk.checked = !!t.concluida;
+      chk.addEventListener("change", () => {
+        el.classList.toggle("feita", chk.checked);
+        enviar("toggle", { tarefa_id: t.id, concluida: chk.checked });
+      });
+      const txt = document.createElement("span");
+      txt.className = "txt"; txt.textContent = t.descricao;
+      const prazo = document.createElement("span");
+      prazo.className = "prazo"; prazo.textContent = t.prazo || "";
+
+      el.append(alca, chk, txt, prazo);
+      ligarArrasto(alca, el);
+      lista.appendChild(el);
+    });
+    ajustarAltura();
+  }
+
+  // Arrasto por ponteiro. A captura fica na lista (que nunca muda de lugar): reposicionar a
+  // linha no DOM faz o navegador soltar a captura de quem foi movido.
+  function ligarArrasto(alca, el) {
+    alca.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const ordemInicial = ids();
+      el.classList.add("arrastando");
+      try { lista.setPointerCapture(e.pointerId); } catch (_) {}
+
+      const mover = (ev) => {
+        const y = ev.clientY;
+        const irmaos = [...lista.children].filter((c) => c !== el);
+        const alvo = irmaos.find((c) => {
+          const r = c.getBoundingClientRect();
+          return y < r.top + r.height / 2;
+        }) || null;
+        if (alvo !== el.nextElementSibling) lista.insertBefore(el, alvo);
+      };
+      const soltar = () => {
+        lista.removeEventListener("pointermove", mover);
+        lista.removeEventListener("pointerup", soltar);
+        lista.removeEventListener("pointercancel", soltar);
+        lista.removeEventListener("lostpointercapture", soltar);
+        el.classList.remove("arrastando");
+        const nova = ids();
+        if (nova.join() !== ordemInicial.join()) enviar("ordem", { ordem: nova });
+      };
+      lista.addEventListener("pointermove", mover);
+      lista.addEventListener("pointerup", soltar);
+      lista.addEventListener("pointercancel", soltar);
+      lista.addEventListener("lostpointercapture", soltar);
+    });
+  }
+  function ids() { return [...lista.children].map((c) => Number(c.dataset.id)); }
+
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "streamlit:render") desenhar(e.data.args.itens || []);
+  });
+  window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
+</script>
+</body>
+</html>

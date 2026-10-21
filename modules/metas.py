@@ -7,7 +7,7 @@ from database import metas_repo as repo
 
 PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
 PRIORIDADE_ORDEM = {"alta": 0, "media": 1, "baixa": 2}
-STATUS = {"ativa": "Ativa", "concluida": "Concluída", "arquivada": "Arquivada"}
+STATUS = {"ativa": "Ativa", "atrasada": "Atrasada", "concluida": "Concluída", "arquivada": "Arquivada"}
 STATUS_ORDEM = {"ativa": 0, "concluida": 1, "arquivada": 2}
 
 VISOES = ["todas", "semana", "mes", "atrasadas", "sem_prazo", "arquivadas"]
@@ -51,6 +51,25 @@ def _filtrar(metas, visao, hoje):
     if visao == "sem_prazo":
         return [m for m in metas if m["prazo"] is None]
     return metas
+
+
+def _categoria(meta, hoje):
+    """Categoria exibida no cartão: ativa, atrasada, concluída ou arquivada."""
+    return "atrasada" if _atrasada(meta, hoje) else meta["status"]
+
+
+def _resumo(metas, hoje):
+    """Números dos três painéis (metas arquivadas ficam de fora)."""
+    semana = _filtrar(metas, "semana", hoje)
+    mes = _filtrar(metas, "mes", hoje)
+    feitas = lambda lista: sum(1 for m in lista if m["status"] == "concluida")
+    return {
+        "semana_feitas": feitas(semana),
+        "semana_faltam": len(semana) - feitas(semana),
+        "mes_feitas": feitas(mes),
+        "mes_total": len(mes),
+        "atrasadas": len(_filtrar(metas, "atrasadas", hoje)),
+    }
 
 
 def _ordenar(metas):
@@ -187,15 +206,15 @@ def _cartao(meta, tarefas, hoje):
     feitas = sum(1 for t in tarefas if t["concluida"])
     pct = round(feitas / total * 100) if total else 0
 
+    categoria = _categoria(meta, hoje)
+
     with st.container(border=True, key=f"meta_card_{meta['id']}"):
         topo, acoes = st.columns([5, 3], vertical_alignment="top")
         with topo:
-            atrasada = '<span class="badge atrasada">Atrasada</span>' if _atrasada(meta, hoje) else ""
             st.markdown(
-                f'<p class="meta-title">{meta["titulo"]}</p>'
-                f'<span class="badge {meta["prioridade"]}">{PRIORIDADES[meta["prioridade"]]}</span>'
-                f'<span class="badge status-{meta["status"]}">{STATUS[meta["status"]]}</span>'
-                f'{atrasada}<span class="badge">{_fmt_data(meta["prazo"])}</span>',
+                f'<p class="meta-title">{meta["titulo"]}'
+                f'<span class="badge status-{categoria}">{STATUS[categoria]}</span>'
+                f'<span class="badge {meta["prioridade"]}">{PRIORIDADES[meta["prioridade"]]}</span></p>',
                 unsafe_allow_html=True,
             )
         with acoes:
@@ -218,7 +237,15 @@ def _cartao(meta, tarefas, hoje):
         if meta["descricao"]:
             st.markdown(f'<p class="meta-desc">{meta["descricao"]}</p>', unsafe_allow_html=True)
 
-        st.progress(pct / 100, text=f"{feitas}/{total} tarefas · {pct}%" if total else "Sem tarefas ainda")
+        st.markdown(
+            f'<div class="meta-info">'
+            f'<span class="material-icon">calendar_today</span>Prazo: {_fmt_data(meta["prazo"])}'
+            f'<span class="material-icon">task_alt</span>{feitas} / {total} tarefas</div>'
+            f'<div class="prog-head"><span>Tarefas</span><b>{feitas} / {total}</b></div>'
+            f'<div class="prog-track"><div class="prog-fill" style="width:{pct}%"></div></div>'
+            f'<div class="prog-foot">{pct}% concluído</div>',
+            unsafe_allow_html=True,
+        )
 
         # Estado de aberto/fechado em session_state: st.expander recolhe a cada rerun.
         abertos = st.session_state.setdefault("checklists_abertos", set())
@@ -235,6 +262,16 @@ def _cartao(meta, tarefas, hoje):
 
 # ---------- tela ----------
 
+def _painel_metricas(paineis):
+    for coluna, (chave, titulo, icone, valor, texto) in zip(st.columns(len(paineis)), paineis):
+        with coluna, st.container(border=True, key=f"meta_panel_{chave}"):
+            st.markdown(
+                f'<div class="panel-head"><span>{titulo}</span><span class="material-icon">{icone}</span></div>'
+                f'<div class="panel-value">{valor}</div><div class="panel-sub">{texto}</div>',
+                unsafe_allow_html=True,
+            )
+
+
 def render():
     hoje = date.today()
     metas = repo.listar_metas()
@@ -243,9 +280,23 @@ def render():
         tarefas_por_meta.setdefault(t["meta_id"], []).append(t)
 
     topo, botao = st.columns([3, 2], vertical_alignment="center")
-    topo.markdown('<div class="atlas-title">Metas Pessoais</div>', unsafe_allow_html=True)
+    topo.markdown(
+        '<div class="atlas-title">Metas Pessoais</div>'
+        '<div class="atlas-sub">Acompanhe o seu progresso e alcance os seus objetivos</div>',
+        unsafe_allow_html=True,
+    )
     if botao.button("Nova meta", icon=":material/add:", type="primary", use_container_width=True):
         _abrir_dialogo()
+
+    r = _resumo(metas, hoje)
+    _painel_metricas([
+        ("ativas", "Metas Semanais", "target", r["semana_feitas"],
+         f"{r['semana_faltam']} ainda faltam nesta semana" if r["semana_faltam"] else "Nenhuma pendente nesta semana"),
+        ("andamento", "Metas Mensais", "task_alt", f"{r['mes_feitas']}/{r['mes_total']}",
+         f"{r['mes_total'] - r['mes_feitas']} pendentes neste mês"),
+        ("atrasadas", "Metas Atrasadas", "error", r["atrasadas"],
+         "Precisam de atenção" if r["atrasadas"] else "Nenhuma atrasada"),
+    ])
 
     contagem = {v: len(_filtrar(metas, v, hoje)) for v in VISOES}
     visao = st.segmented_control(

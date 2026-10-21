@@ -94,7 +94,8 @@ div[class*="st-key-meta_card"]:hover {
 .atlas-sub { color: var(--atlas-text-dim); margin-bottom: 1.2rem; }
 
 .meta-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
-.meta-desc { color: var(--atlas-text-dim); font-size: .92rem; margin: .1rem 0 .4rem 0; }
+.meta-title .badge { margin-left: .6rem; vertical-align: middle; }
+.meta-desc { color: var(--atlas-text-dim); font-size: .92rem; margin: .1rem 0 .6rem 0; }
 .badge {
     display: inline-block; padding: .12rem .65rem; border-radius: 999px;
     font-size: .74rem; font-weight: 500; margin-right: .4rem;
@@ -103,16 +104,56 @@ div[class*="st-key-meta_card"]:hover {
 .badge.alta { border-color: #ff4d8d; color: #ff7aa8; }
 .badge.media { border-color: var(--atlas-purple); color: #d39bff; }
 .badge.baixa { border-color: #4dd2c1; color: #7fe3d6; }
-.badge.status-concluida { background: rgba(77, 210, 193, .12); }
-.badge.status-arquivada { color: var(--atlas-text-dim); }
-.badge.atrasada { border-color: #ff4d4d; color: #ff7a7a; }
+.badge.status-ativa { background: var(--atlas-purple-soft); border-color: transparent; color: #d39bff; }
+.badge.status-concluida { background: rgba(77, 210, 193, .12); border-color: transparent; color: #7fe3d6; }
+.badge.status-arquivada { background: #23232d; border-color: transparent; color: var(--atlas-text-dim); }
+.badge.status-atrasada { background: rgba(255, 77, 77, .12); border-color: transparent; color: #ff7a7a; }
 
-/* ---------- Progresso ---------- */
-[data-testid="stProgressBarTrack"] { background: #2b2b37; }
-[data-testid="stProgressBarTrack"] > div {
+/* ---------- Painéis de métricas ---------- */
+div[class*="st-key-meta_panel"] {
+    --neon: 180, 76, 255;
+    background: var(--atlas-card);
+    border: 1px solid var(--atlas-border);
+    border-bottom-color: rgba(var(--neon), .75);
+    border-radius: 16px;
+    box-shadow: 0 10px 22px -14px rgba(var(--neon), .7);
+}
+div[class*="st-key-meta_panel_andamento"] { --neon: 77, 210, 193; }
+div[class*="st-key-meta_panel_atrasadas"] { --neon: 255, 77, 77; }
+.material-icon {
+    font-family: 'Material Symbols Rounded' !important;
+    font-weight: 400; font-size: 1.1rem; line-height: 1;
+    font-feature-settings: 'liga'; -webkit-font-feature-settings: 'liga';
+    vertical-align: middle; margin-right: .35rem;
+}
+.panel-head {
+    display: flex; justify-content: space-between; align-items: center; gap: .5rem;
+    font-size: .92rem; font-weight: 500;
+}
+.panel-head > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-head .material-icon { margin: 0; color: var(--atlas-text-dim); }
+.panel-value { font-size: 2.4rem; font-weight: 700; line-height: 1.15; margin: .3rem 0 .1rem 0; }
+/* altura fixa de duas linhas: os três painéis ficam iguais mesmo com texto que quebra */
+.panel-sub { color: var(--atlas-text-dim); font-size: .8rem; line-height: 1.3; min-height: 2.6em; padding-bottom: .9rem; box-sizing: content-box; }
+div[class*="st-key-meta_panel_ativas"] .panel-head > span:first-child { color: #d39bff; }
+div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color: #ff7a7a; }
+
+/* ---------- Progresso do cartão ---------- */
+.meta-info { color: var(--atlas-text-dim); font-size: .88rem; margin-bottom: .9rem; }
+.meta-info .material-icon { margin-left: 1.1rem; }
+.meta-info .material-icon:first-child { margin-left: 0; }
+.prog-head { display: flex; justify-content: space-between; font-size: .8rem; margin-bottom: .3rem; }
+.prog-track { height: 8px; border-radius: 999px; background: #2b2b37; overflow: hidden; }
+/* a animação enche a barra do zero ao carregar; a transição anima mudanças depois */
+@keyframes prog-fill { from { width: 0; } }
+.prog-fill {
+    height: 100%; border-radius: 999px;
+    transition: width .9s cubic-bezier(.22, 1, .36, 1);
+    animation: prog-fill 1s cubic-bezier(.22, 1, .36, 1);
     background: linear-gradient(90deg, #7a2fd1, var(--atlas-purple));
     box-shadow: 0 0 10px rgba(180, 76, 255, 0.5);
 }
+.prog-foot { color: var(--atlas-text-dim); font-size: .78rem; margin-top: .3rem; padding-bottom: .5rem; }
 
 /* botão que abre/fecha o checklist */
 div[class*="st-key-toggle_check"] button {
@@ -120,10 +161,6 @@ div[class*="st-key-toggle_check"] button {
     border: none; background: transparent; color: #c9c9d6; padding-left: 0;
 }
 div[class*="st-key-toggle_check"] button:hover { color: #fff; background: transparent; }
-div[data-testid="stProgress"] div[role="progressbar"] > div > div,
-div[data-testid="stProgress"] > div > div > div > div {
-    background: linear-gradient(90deg, #7a2fd1, var(--atlas-purple));
-}
 
 /* ---------- Logo placeholder ---------- */
 .logo-placeholder {

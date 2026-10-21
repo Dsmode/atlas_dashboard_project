@@ -29,6 +29,7 @@ def _metas_semanais():
     return (
         f'<div class="home-tile"><div class="tile-head"><span>Metas Semanais</span>{_icone("flag")}</div>'
         f'<div class="tile-value">{concluidas:02d}/{total:02d}</div>'
+        f'<div class="tile-note">{pct}% concluído</div>'
         f'<div class="mini-track"><div class="mini-fill" style="width:{pct}%"></div></div></div>'
     )
 

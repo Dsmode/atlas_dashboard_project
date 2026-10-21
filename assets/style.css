@@ -234,6 +234,7 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 }
 .tile-ico .material-icon { margin: 0; font-size: 1.1rem; }
 .tile-value { font-size: 2.5rem; font-weight: 600; line-height: 1.1; margin: .5rem 0 .6rem; }
+.tile-note { color: #8a8a9c; font-size: .78rem; margin: -.25rem 0 .5rem; }
 .tile-line { color: #c9c9d6; font-size: .88rem; margin: .45rem 0; }
 .mini-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .mini-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); box-shadow: 0 0 8px rgba(180, 76, 255, 0.6); }

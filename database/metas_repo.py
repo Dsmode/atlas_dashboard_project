@@ -7,6 +7,18 @@ def listar_metas():
         return cur.fetchall()
 
 
+def contar_metas_no_periodo(inicio, fim):
+    """Retorna (concluidas, total) das metas com prazo entre `inicio` e `fim`; arquivadas ficam fora."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS total, COALESCE(SUM(status = 'concluida'), 0) AS concluidas "
+            "FROM metas WHERE status IN ('ativa', 'concluida') AND prazo BETWEEN %s AND %s",
+            (inicio, fim),
+        )
+        linha = cur.fetchone()
+    return int(linha["concluidas"]), int(linha["total"])
+
+
 def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas):
     """Cria (meta_id=None) ou atualiza a meta e sincroniza o checklist numa só transação.
 

@@ -1,8 +1,10 @@
 import base64
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import streamlit as st
+
+from database import metas_repo
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
 
@@ -18,15 +20,21 @@ def _icone(nome):
     return f'<span class="tile-ico"><span class="material-icon">{nome}</span></span>'
 
 
-# Os cartões do resumo são decorativos por enquanto: mostram o formato do que cada ferramenta vai exibir.
-_RESUMO = f"""
-<div class="home-section-title">Resumo do painel</div>
-<div class="home-grid">
-    <div class="home-tile">
-        <div class="tile-head"><span>Metas ativas</span>{_icone("flag")}</div>
-        <div class="tile-value">5</div>
-        <div class="mini-track"><div class="mini-fill" style="width:22%"></div></div>
-    </div>
+def _metas_semanais():
+    """Bloco real: metas concluídas / total com prazo na semana atual (domingo a sábado)."""
+    hoje = date.today()
+    inicio = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
+    concluidas, total = metas_repo.contar_metas_no_periodo(inicio, inicio + timedelta(days=6))
+    pct = round(concluidas / total * 100) if total else 0
+    return (
+        f'<div class="home-tile"><div class="tile-head"><span>Metas Semanais</span>{_icone("flag")}</div>'
+        f'<div class="tile-value">{concluidas:02d}/{total:02d}</div>'
+        f'<div class="mini-track"><div class="mini-fill" style="width:{pct}%"></div></div></div>'
+    )
+
+
+# Os demais cartões do resumo são decorativos por enquanto: mostram o formato do que cada ferramenta vai exibir.
+_RESUMO_RESTO = f"""
     <div class="home-tile">
         <div class="tile-head"><span>Prazos próximos</span>{_icone("calendar_month")}</div>
         <div class="tile-line" style="margin-top:1rem">Comprar casa · 15 out.</div>
@@ -97,5 +105,10 @@ def render():
         """,
         unsafe_allow_html=True,
     )
-    st.markdown(_RESUMO, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="home-section-title">Resumo do painel</div><div class="home-grid">'
+        + _metas_semanais()
+        + _RESUMO_RESTO,
+        unsafe_allow_html=True,
+    )
     st.markdown(_FUTURO, unsafe_allow_html=True)

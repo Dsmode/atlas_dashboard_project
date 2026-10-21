@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import date, timedelta
 from html import escape
 
@@ -38,15 +39,80 @@ def _chips(categorias):
     return f'<div class="cat-chips">{"".join(_chip(c) for c in categorias)}</div>' if categorias else ""
 
 
-def _filtrar_por_categorias(metas, categoria_ids):
-    """Metas que têm ao menos uma das categorias; sem seleção, devolve todas.
+def _normalizar(texto):
+    """Minúsculas e sem acentos, para a busca ignorar caixa e acentuação."""
+    decomposto = unicodedata.normalize("NFKD", texto or "")
+    return "".join(c for c in decomposto if not unicodedata.combining(c)).casefold()
 
-    Pronto para o futuro botão de classificar por categorias (ainda sem interface).
-    """
+
+def _filtrar_busca(metas, texto):
+    """Metas cujo título ou descrição contém o texto digitado; vazio devolve todas."""
+    termo = _normalizar(texto.strip())
+    if not termo:
+        return list(metas)
+    return [m for m in metas if termo in _normalizar(m["titulo"]) or termo in _normalizar(m["descricao"])]
+
+
+def _filtrar_por_categorias(metas, categoria_ids):
+    """Metas que têm ao menos uma das categorias; sem seleção, devolve todas."""
     ids = set(categoria_ids)
     if not ids:
         return list(metas)
     return [m for m in metas if ids & {c["id"] for c in m["categorias"]}]
+
+
+def _bolinhas(categorias):
+    return "".join(f'<span class="cat-dot" style="background:{c["cor"]}"></span>' for c in categorias)
+
+
+def _campo_busca():
+    """Busca por título e descrição. O texto fica em session_state para sobreviver à troca de módulo."""
+    def guardar():
+        st.session_state.busca_metas = st.session_state.w_busca_metas
+
+    if "w_busca_metas" not in st.session_state:
+        st.session_state.w_busca_metas = st.session_state.get("busca_metas", "")
+    return st.text_input(
+        "Buscar metas", key="w_busca_metas", on_change=guardar, placeholder="Buscar metas por título ou descrição",
+        label_visibility="collapsed",
+    )
+
+
+def _filtro_categorias(categorias):
+    """Botão de filtro por categorias (popover). Sem categoria marcada vale 'Geral' (todas as metas).
+
+    A seleção fica em session_state para sobreviver à troca de módulo. Devolve os ids marcados
+    que ainda existem no catálogo.
+    """
+    selecionadas = st.session_state.setdefault("filtro_categorias", set())
+    ativas = selecionadas & {c["id"] for c in categorias}
+
+    def limpar():
+        selecionadas.clear()
+        for c in categorias:
+            st.session_state[f"flt_cat_{c['id']}"] = False
+
+    def marcar(categoria_id):
+        (selecionadas.add if st.session_state[f"flt_cat_{categoria_id}"] else selecionadas.discard)(categoria_id)
+
+    with st.popover("Categorias", icon=":material/label:"):
+        st.button(
+            "Geral", type="secondary" if ativas else "primary", use_container_width=True,
+            key="flt_geral", on_click=limpar,
+        )
+        for c in categorias:
+            chave = f"flt_cat_{c['id']}"
+            if chave not in st.session_state:
+                st.session_state[chave] = c["id"] in ativas
+            p0, c1 = st.columns([1, 8], vertical_alignment="center")
+            p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
+            c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"],))
+        st.button("Limpar", disabled=not ativas, use_container_width=True, key="flt_limpar", on_click=limpar)
+
+    marcadas = [c for c in categorias if c["id"] in ativas]
+    if marcadas:
+        st.markdown(_bolinhas(marcadas), unsafe_allow_html=True)
+    return ativas
 
 
 def _fmt_data(d):
@@ -399,6 +465,7 @@ def _painel_metricas(paineis):
 def render():
     hoje = date.today()
     metas = repo.listar_metas()
+    categorias = repo.listar_categorias()
     tarefas_por_meta = {}
     for t in repo.listar_tarefas():
         tarefas_por_meta.setdefault(t["meta_id"], []).append(t)
@@ -422,7 +489,15 @@ def render():
          "Precisam de atenção" if r["atrasadas"] else "Nenhuma atrasada"),
     ])
 
-    contagem = {v: len(_filtrar(metas, v, hoje)) for v in VISOES}
+    busca_col, cat_col = st.columns([4, 2], vertical_alignment="center")
+    with busca_col:
+        busca = _campo_busca()
+    with cat_col:
+        selecionadas = _filtro_categorias(categorias)
+
+    # Busca e categorias valem para a visualização: as contagens do filtro já as consideram.
+    base = _filtrar_por_categorias(_filtrar_busca(metas, busca), selecionadas)
+    contagem = {v: len(_filtrar(base, v, hoje)) for v in VISOES}
     visao = st.segmented_control(
         "Visualização", VISOES, default="todas", key="visao_metas",
         format_func=lambda v: f"{VISOES_NOME[v]} ({contagem[v]})", label_visibility="collapsed",
@@ -436,8 +511,11 @@ def render():
         on_change=lambda: st.session_state.update(confirmar_exclusao=st.session_state.w_confirmar_exclusao),
     )
 
-    visiveis = _ordenar(_filtrar(metas, visao, hoje))
+    visiveis = _ordenar(_filtrar(base, visao, hoje))
     if not visiveis:
-        st.info("Nenhuma meta nesta visualização.")
+        st.markdown(
+            '<div style="text-align:center;color:#8d8d9c;padding:2rem 0">Nenhuma meta encontrada</div>',
+            unsafe_allow_html=True,
+        )
     for meta in visiveis:
         _cartao(meta, tarefas_por_meta.get(meta["id"], []), hoje)

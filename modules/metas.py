@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from html import escape
 
 import streamlit as st
 
@@ -15,6 +16,38 @@ VISOES_NOME = {
     "semana": "Semanais", "mes": "Mensais", "atrasadas": "Atrasadas",
     "sem_prazo": "Sem prazo", "todas": "Todas", "arquivadas": "Arquivadas",
 }
+
+COR_PADRAO_CATEGORIA = "#b44cff"
+NOME_CATEGORIA_MAX = 30
+
+
+def _cor_texto(cor):
+    """Texto escuro ou claro, conforme a luminosidade da cor de fundo escolhida."""
+    r, g, b = (int(cor[i:i + 2], 16) for i in (1, 3, 5))
+    return "#14141a" if 0.299 * r + 0.587 * g + 0.114 * b > 150 else "#ffffff"
+
+
+def _chip(categoria):
+    return (
+        f'<span class="cat-chip" style="background:{categoria["cor"]};color:{_cor_texto(categoria["cor"])}">'
+        f'{escape(categoria["nome"])}</span>'
+    )
+
+
+def _chips(categorias):
+    return f'<div class="cat-chips">{"".join(_chip(c) for c in categorias)}</div>' if categorias else ""
+
+
+def _filtrar_por_categorias(metas, categoria_ids):
+    """Metas que têm ao menos uma das categorias; sem seleção, devolve todas.
+
+    Pronto para o futuro botão de classificar por categorias (ainda sem interface).
+    """
+    ids = set(categoria_ids)
+    if not ids:
+        return list(metas)
+    return [m for m in metas if ids & {c["id"] for c in m["categorias"]}]
+
 
 def _fmt_data(d):
     return d.strftime("%d/%m/%Y") if d else "sem prazo"
@@ -95,6 +128,8 @@ def _abrir_dialogo(meta=None, tarefas=()):
     st.session_state.dlg = {
         "nonce": nonce,
         "meta": meta,
+        "categorias": {c["id"] for c in meta["categorias"]} if meta else set(),
+        "cat_modo": None,  # None | "nova" | ("editar", id) | ("excluir", id)
         "proximo_uid": len(tarefas),
         "tarefas": [
             {"uid": i, "id": t["id"], "descricao": t["descricao"], "prazo": t["prazo"]}
@@ -131,6 +166,90 @@ def _editor_tarefas(dlg):
                 st.rerun(scope="fragment")
 
 
+def _form_categoria(dlg, categoria=None):
+    """Formulário de criar/editar categoria: só nome e cor. O catálogo grava na hora."""
+    n = dlg["nonce"]
+    sufixo = f"{n}_{categoria['id'] if categoria else 'nova'}"
+    nome = st.text_input(
+        "Nome da categoria", value=categoria["nome"] if categoria else "", max_chars=NOME_CATEGORIA_MAX,
+        key=f"cat_nome_{sufixo}",
+    )
+    cor = st.color_picker(
+        "Cor", value=categoria["cor"] if categoria else COR_PADRAO_CATEGORIA, key=f"cat_cor_{sufixo}",
+    )
+    b1, b2 = st.columns(2)
+    if b1.button("Cancelar", use_container_width=True, key=f"cat_cancel_{sufixo}"):
+        dlg["cat_modo"] = None
+        st.rerun(scope="fragment")
+    if b2.button("Salvar", type="primary", use_container_width=True, key=f"cat_save_{sufixo}"):
+        if not nome.strip():
+            st.error("Dê um nome à categoria.")
+            return
+        try:
+            if categoria:
+                repo.atualizar_categoria(categoria["id"], nome.strip(), cor)
+            else:
+                dlg["categorias"].add(repo.criar_categoria(nome.strip(), cor))
+        except repo.CategoriaDuplicada:
+            st.error("Já existe uma categoria com esse nome.")
+            return
+        dlg["cat_modo"] = None
+        st.rerun(scope="fragment")
+
+
+def _seletor_categorias(dlg):
+    """Botão 'Categorias' (popover estilo Trello): marcar, criar, editar e excluir categorias."""
+    n = dlg["nonce"]
+    categorias = repo.listar_categorias()
+    selecionadas = dlg["categorias"]
+    modo = dlg["cat_modo"]
+    por_id = {c["id"]: c for c in categorias}
+
+    with st.popover("Categorias", icon=":material/label:"):
+        if modo == "nova":
+            _form_categoria(dlg)
+        elif isinstance(modo, tuple) and modo[1] in por_id:
+            if modo[0] == "editar":
+                _form_categoria(dlg, por_id[modo[1]])
+            else:
+                c = por_id[modo[1]]
+                st.write(
+                    f"Excluir **{c['nome']}**? Ela será removida de {c['em_uso']} meta(s); as metas permanecem."
+                )
+                b1, b2 = st.columns(2)
+                if b1.button("Cancelar", use_container_width=True, key=f"cat_xno_{n}"):
+                    dlg["cat_modo"] = None
+                    st.rerun(scope="fragment")
+                if b2.button("Excluir", type="primary", use_container_width=True, key=f"cat_xsim_{n}"):
+                    repo.excluir_categoria(c["id"])
+                    selecionadas.discard(c["id"])
+                    dlg["cat_modo"] = None
+                    st.rerun(scope="fragment")
+        else:
+            if not categorias:
+                st.caption("Nenhuma categoria ainda.")
+            for c in categorias:
+                p0, c1, c2, c3 = st.columns([1, 8, 1, 1], vertical_alignment="center")
+                p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
+                marcada = c1.checkbox(
+                    c["nome"], value=c["id"] in selecionadas, key=f"cat_chk_{n}_{c['id']}",
+                )
+                (selecionadas.add if marcada else selecionadas.discard)(c["id"])
+                if c2.button("", icon=":material/edit:", help="Editar categoria", key=f"cat_ed_{n}_{c['id']}"):
+                    dlg["cat_modo"] = ("editar", c["id"])
+                    st.rerun(scope="fragment")
+                if c3.button("", icon=":material/delete:", help="Excluir categoria", key=f"cat_ex_{n}_{c['id']}"):
+                    dlg["cat_modo"] = ("excluir", c["id"])
+                    st.rerun(scope="fragment")
+            if st.button("Criar nova categoria", icon=":material/add:", use_container_width=True, key=f"cat_new_{n}"):
+                dlg["cat_modo"] = "nova"
+                st.rerun(scope="fragment")
+
+    marcadas = [c for c in categorias if c["id"] in selecionadas]
+    if marcadas:
+        st.markdown(_chips(marcadas), unsafe_allow_html=True)
+
+
 @st.dialog("Meta", width="large")
 def _dialogo_meta():
     dlg = st.session_state.dlg
@@ -149,6 +268,8 @@ def _dialogo_meta():
         "Prazo (opcional)", value=meta["prazo"] if meta else None, format="DD/MM/YYYY", key=f"dlg_prazo_{n}",
     )
 
+    _seletor_categorias(dlg)
+
     _editor_tarefas(dlg)
 
     if st.button("Salvar", type="primary", use_container_width=True, key=f"dlg_salvar_{n}"):
@@ -157,7 +278,7 @@ def _dialogo_meta():
             return
         repo.salvar_meta(
             meta["id"] if meta else None, titulo.strip(), descricao.strip() or None,
-            prioridade, prazo, dlg["tarefas"],
+            prioridade, prazo, dlg["tarefas"], sorted(dlg["categorias"]),
         )
         st.rerun()
 
@@ -233,6 +354,9 @@ def _cartao(meta, tarefas, hoje):
                 st.rerun()
             if b4.button("", icon=":material/delete:", key=f"del_{meta['id']}", help="Excluir", use_container_width=True):
                 _pedir_exclusao(meta["id"], meta["titulo"])
+
+        if meta["categorias"]:
+            st.markdown(_chips(meta["categorias"]), unsafe_allow_html=True)
 
         if meta["descricao"]:
             st.markdown(f'<p class="meta-desc">{meta["descricao"]}</p>', unsafe_allow_html=True)

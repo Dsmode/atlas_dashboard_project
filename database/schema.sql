@@ -24,3 +24,17 @@ CREATE TABLE IF NOT EXISTS tarefas_meta (
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (meta_id) REFERENCES metas (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS categorias_meta (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(30) NOT NULL UNIQUE,
+    cor CHAR(7) NOT NULL DEFAULT '#b44cff'
+);
+
+CREATE TABLE IF NOT EXISTS metas_categorias (
+    meta_id INT NOT NULL,
+    categoria_id INT NOT NULL,
+    PRIMARY KEY (meta_id, categoria_id),
+    FOREIGN KEY (meta_id) REFERENCES metas (id) ON DELETE CASCADE,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_meta (id) ON DELETE CASCADE
+);

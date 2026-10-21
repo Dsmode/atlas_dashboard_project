@@ -3,7 +3,7 @@
 Dashboard pessoal modular (Python + Streamlit + MySQL), com interface HUD em tema escuro, roxo neon e efeito de vidro (glassmorphism).
 
 ## Módulos (ferramentas)
-- **Início:** logo, data e hora atuais, resumo do painel e blocos reservados para as próximas ferramentas.
+- **Início:** logo, data e hora atuais, resumo do painel (Metas Semanais com dados reais da semana) e blocos reservados para as próximas ferramentas.
 - **Metas Pessoais:** cadastro, edição e exclusão de metas, checklist de tarefas com arrastar para reordenar, prazos, prioridade, painéis de métricas (semanais, mensais e atrasadas) e filtros.
 
 ## Executar

@@ -10,7 +10,7 @@ LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
 def _logo_html():
     if LOGO_PATH.exists():
         dados = base64.b64encode(LOGO_PATH.read_bytes()).decode()
-        return f'<img src="data:image/png;base64,{dados}" width="200" alt="ATLAS">'
+        return f'<img src="data:image/png;base64,{dados}" width="260" alt="ATLAS">'
     return '<div class="logo-placeholder">LOGO</div>'
 
 

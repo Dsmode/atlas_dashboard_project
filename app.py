@@ -6,9 +6,12 @@ import streamlit as st
 from database.connection import init_db
 from modules import home, metas
 
-st.set_page_config(page_title="ATLAS", page_icon="🪐", layout="wide")
-
 ASSETS = Path(__file__).parent / "assets"
+_logo = ASSETS / "logo.png"
+
+# a logo também é o ícone da aba do navegador (emoji enquanto o arquivo não existir)
+st.set_page_config(page_title="ATLAS", page_icon=str(_logo) if _logo.exists() else "🪐", layout="wide")
+
 # a rede geométrica do fundo é um SVG embutido no CSS (o marcador __REDE__ vira um data URI)
 _rede = base64.b64encode((ASSETS / "rede.svg").read_bytes()).decode()
 _css = (ASSETS / "style.css").read_text(encoding="utf-8").replace("__REDE__", f"data:image/svg+xml;base64,{_rede}")

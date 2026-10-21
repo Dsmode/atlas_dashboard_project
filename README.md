@@ -1,6 +1,10 @@
 # ATLAS
 
-Dashboard pessoal modular (Python + Streamlit + MySQL).
+Dashboard pessoal modular (Python + Streamlit + MySQL), com interface HUD em tema escuro, roxo neon e efeito de vidro (glassmorphism).
+
+## Módulos (ferramentas)
+- **Início:** logo, data e hora atuais, resumo do painel e blocos reservados para as próximas ferramentas.
+- **Metas Pessoais:** cadastro, edição e exclusão de metas, checklist de tarefas com arrastar para reordenar, prazos, prioridade, painéis de métricas (semanais, mensais e atrasadas) e filtros.
 
 ## Executar
 1. Inicie o MySQL (`net start MySQL80` em terminal administrador).
@@ -13,3 +17,12 @@ python -m venv .venv
 ```
 O banco `atlas_db` e as tabelas são criados automaticamente na primeira execução.
 
+## Estrutura
+- `app.py`: configuração da página, CSS, menu lateral e roteamento dos módulos.
+- `modules/`: um arquivo por módulo, cada um com `render()`.
+- `database/`: conexão, `schema.sql` e consultas.
+- `components/`: componente próprio do checklist arrastável.
+- `assets/`: `style.css` (tema e vidro), `rede.svg` (fundo), `logo.png` e `favicon.png`.
+
+## Novo módulo
+Crie `modules/<nome>.py` com uma função `render()` e registre em `MODULOS` no `app.py`.

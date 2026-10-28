@@ -7,6 +7,7 @@ import streamlit as st
 
 from components.checklist_sortable import checklist_sortable
 from database import metas_repo as repo
+from modules.metas_dados import menu_dados, mostrar_aviso
 
 PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
 PRIORIDADE_ORDEM = {"alta": 0, "media": 1, "baixa": 2}
@@ -557,14 +558,17 @@ def render():
     for t in repo.listar_tarefas():
         tarefas_por_meta.setdefault(t["meta_id"], []).append(t)
 
-    topo, botao = st.columns([3, 2], vertical_alignment="center")
+    mostrar_aviso()
+    topo, acoes = st.columns([3, 2], vertical_alignment="center")
     topo.markdown(
         '<div class="atlas-title">Metas Pessoais</div>'
         '<div class="atlas-sub">Acompanhe o seu progresso e alcance os seus objetivos</div>',
         unsafe_allow_html=True,
     )
-    if botao.button("Nova meta", icon=":material/add:", type="primary", use_container_width=True):
-        _abrir_dialogo()
+    with acoes, st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key="metas_topo_acoes"):
+        menu_dados()
+        if st.button("Nova meta", icon=":material/add:", type="primary", width="stretch"):
+            _abrir_dialogo()
 
     r = _resumo(metas, hoje)
     _painel_metricas([

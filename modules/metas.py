@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from datetime import date, timedelta
 from html import escape
@@ -34,15 +35,21 @@ COR_GERAL = "#8d8d9c"  # categoria do sistema, sempre disponível
 NOME_CATEGORIA_MAX = 30
 
 
+def _cor(cor):
+    """Cor da categoria pronta para ir em style/CSS: só #rrggbb passa, o resto vira a cor padrão."""
+    return cor if isinstance(cor, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", cor) else COR_PADRAO_CATEGORIA
+
+
 def _cor_texto(cor):
     """Texto escuro ou claro, conforme a luminosidade da cor de fundo escolhida."""
+    cor = _cor(cor)
     r, g, b = (int(cor[i:i + 2], 16) for i in (1, 3, 5))
     return "#14141a" if 0.299 * r + 0.587 * g + 0.114 * b > 150 else "#ffffff"
 
 
 def _chip(categoria):
     return (
-        f'<span class="cat-chip" style="background:{categoria["cor"]};color:{_cor_texto(categoria["cor"])}">'
+        f'<span class="cat-chip" style="background:{_cor(categoria["cor"])};color:{_cor_texto(categoria["cor"])}">'
         f'{escape(categoria["nome"])}</span>'
     )
 
@@ -97,7 +104,7 @@ def _popover_categorias(categorias, selecionadas, ativas):
             chave = f"flt_cat_{c['id']}"
             st.session_state[chave] = c["id"] in ativas
             p0, c1 = st.columns([1, 8], vertical_alignment="center")
-            p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
+            p0.markdown(f'<span class="cat-dot" style="background:{_cor(c["cor"])}"></span>', unsafe_allow_html=True)
             c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"],))
         st.button("Limpar", disabled=not ativas, use_container_width=True, key="flt_limpar", on_click=limpar)
 
@@ -108,7 +115,7 @@ def _chips_filtro(marcadas, selecionadas):
     A linha tem altura fixa (CSS) e existe mesmo sem seleção, para a página não se deslocar ao marcar."""
     # a cor de cada chip vem do CSS por chave: o botão do Streamlit não aceita estilo próprio
     st.html("<style>" + "".join(
-        f'.st-key-flt_chip_{c["id"]} button{{background:{c["cor"]};color:{_cor_texto(c["cor"])}}}' for c in marcadas
+        f'.st-key-flt_chip_{c["id"]} button{{background:{_cor(c["cor"])};color:{_cor_texto(c["cor"])}}}' for c in marcadas
     ) + "</style>")
     with st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key="flt_chips"):
         if not marcadas:
@@ -299,7 +306,7 @@ def _form_categoria(dlg, categoria=None):
         key=f"cat_nome_{sufixo}",
     )
     cor = st.color_picker(
-        "Cor", value=categoria["cor"] if categoria else COR_PADRAO_CATEGORIA, key=f"cat_cor_{sufixo}",
+        "Cor", value=_cor(categoria["cor"]) if categoria else COR_PADRAO_CATEGORIA, key=f"cat_cor_{sufixo}",
     )
     b1, b2 = st.columns(2)
     if b1.button("Cancelar", use_container_width=True, key=f"cat_cancel_{sufixo}"):
@@ -337,7 +344,7 @@ def _seletor_categorias(dlg):
     # seleção já está em dia quando os chips são desenhados.
     marcadas = [c for c in categorias if c["id"] in selecionadas]
     st.html("<style>" + "".join(
-        f'.st-key-dlg_chip_{n}_{c["id"]} button{{background:{c["cor"]};color:{_cor_texto(c["cor"])}}}'
+        f'.st-key-dlg_chip_{n}_{c["id"]} button{{background:{_cor(c["cor"])};color:{_cor_texto(c["cor"])}}}'
         for c in marcadas
     ) + "</style>")
     campo = st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key="dlg_cat_campo")
@@ -372,7 +379,7 @@ def _seletor_categorias(dlg):
                 st.caption("Nenhuma categoria ainda.")
             for c in categorias:
                 p0, c1, c2, c3 = st.columns([1, 8, 1, 1], vertical_alignment="center")
-                p0.markdown(f'<span class="cat-dot" style="background:{c["cor"]}"></span>', unsafe_allow_html=True)
+                p0.markdown(f'<span class="cat-dot" style="background:{_cor(c["cor"])}"></span>', unsafe_allow_html=True)
                 chave = f"cat_chk_{n}_{c['id']}"
                 st.session_state[chave] = c["id"] in selecionadas
                 c1.checkbox(c["nome"], key=chave, on_change=marcar, args=(c["id"], chave))

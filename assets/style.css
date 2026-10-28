@@ -356,6 +356,34 @@ div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="input"],
 div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="base-input"] { border: none; background: transparent; box-shadow: none; }
 div[class*="st-key-dlg_nova_tarefa"] input { background: transparent; }
 
+/* ---------- Exportar / importar ---------- */
+/* botão discreto ao lado de "Nova meta": só o ícone, sem moldura, acende no hover */
+div[class*="st-key-metas_topo_acoes"] { flex-wrap: nowrap; }
+div[class*="st-key-io_menu"] { flex: none; width: auto; }
+div[class*="st-key-io_menu"] button {
+    min-height: 0; width: 2.4rem; height: 2.4rem; padding: 0; border: none; border-radius: 50%;
+    background: transparent; color: var(--atlas-text-dim); transition: background .2s, color .2s;
+}
+div[class*="st-key-io_menu"] button:hover, div[class*="st-key-io_menu"] button[aria-expanded="true"] {
+    background: var(--atlas-purple-soft); color: #fff;
+}
+div[class*="st-key-io_menu"] button [data-testid="stIconMaterial"] { font-size: 1.35rem; }
+div[class*="st-key-io_menu"] button > div > div[aria-hidden="true"] { display: none; }  /* seta do popover: o botão é só o ícone */
+
+/* o menu fica aberto no navegador quando o diálogo abre (o servidor não fecha popover): esconde só ele */
+body:has(div[data-testid="stDialog"]) [data-testid="stPopoverBody"]:has([class*="st-key-io_exportar"]) { display: none; }
+
+/* duplicadas na importação: título, o que difere (atual → importada) e a escolha logo abaixo */
+.io-item { margin-top: .7rem; padding: .55rem .8rem; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--glass-border); border-radius: 10px; }
+.io-titulo { font-size: .92rem; font-weight: 600; }
+.io-prazo { margin-left: .6rem; color: var(--atlas-text-dim); font-size: .74rem; font-weight: 400; }
+.io-dif { display: flex; align-items: center; gap: .5rem; margin-top: .25rem; font-size: .8rem; }
+.io-campo { flex: none; width: 5.2rem; color: var(--atlas-text-dim); text-transform: uppercase; font-size: .66rem; letter-spacing: .1em; }
+.io-antes { color: #c9c9d6; text-decoration: line-through; text-decoration-color: rgba(255, 122, 122, 0.6); }
+.io-depois { color: #fff; }
+.io-seta { color: #d39bff; }
+.io-ponto { width: 12px; height: 12px; vertical-align: middle; }
+
 /* ---------- Início ---------- */
 /* sai da coluna central e fica no canto superior esquerdo da área principal */
 div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top: 1.1rem; left: 1.6rem; width: auto; }

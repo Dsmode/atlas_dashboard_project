@@ -362,8 +362,8 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 .home-clock { color: var(--atlas-text-dim); font-size: .85rem; }
 .home-clock .material-icon { font-size: 1rem; margin-right: .5rem; }
 .home-hero {
-    min-height: 62vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; text-align: center; padding: 1rem 0 2rem;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; padding: .5rem 0 1rem;
 }
 .logo-placeholder {
     width: 170px; height: 170px; margin: 0 auto 1.6rem auto;
@@ -375,7 +375,7 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 }
 /* drop-shadow segue o contorno do PNG transparente: o brilho envolve só o A */
 .home-hero img {
-    display: block; margin: 0 auto 1.6rem auto;
+    display: block; margin: 0 auto 1.6rem auto; width: min(260px, 24vh); height: auto;
     filter: drop-shadow(0 0 6px rgba(180, 76, 255, 0.9)) drop-shadow(0 0 22px rgba(180, 76, 255, 0.6)) drop-shadow(0 0 48px rgba(180, 76, 255, 0.35));
 }
 /* o espaçamento entre letras também sobra depois da última: o recuo à esquerda recentraliza */
@@ -387,13 +387,70 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 
 .home-section-title { font-size: 1.15rem; font-weight: 500; margin: 1rem 0 .9rem 0; }
 .home-grid { display: grid; gap: 1.1rem; grid-template-columns: repeat(3, 1fr); margin-bottom: 2.2rem; }
-.home-tile {
+/* resumo: grade de 3 cartões (dois em HTML e o gráfico, que é um contêiner nativo por causa do seletor) */
+div[class*="st-key-resumo_grid"] { display: grid; gap: 1.1rem; grid-template-columns: repeat(3, 1fr); margin-bottom: 2.2rem; }
+/* o fragmento envolve o cartão do gráfico em 3 camadas: dissolvê-las deixa o cartão como filho direto da grade */
+div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"],
+div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"],
+div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] { display: contents; }
+/* os cartões em HTML acompanham a altura da linha */
+div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"],
+div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdown"],
+div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdown"] > div,
+div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"],
+div[class*="st-key-resumo_grid"] .home-tile { height: 100%; }
+div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-resumo_grid"] .home-tile { box-sizing: border-box; }
+.home-tile, div[class*="st-key-tile_concluidas"] {
     background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border); border-radius: 18px; box-shadow: var(--glass-shadow);
     padding: 1.15rem 1.3rem; min-height: 150px; position: relative; overflow: hidden;
     transition: border-color .25s, box-shadow .25s;
 }
-.home-tile:hover { border-color: rgba(180, 76, 255, 0.5); box-shadow: var(--glass-shadow), 0 0 22px rgba(180, 76, 255, 0.18); }
+.home-tile:hover, div[class*="st-key-tile_concluidas"]:hover { border-color: rgba(180, 76, 255, 0.5); box-shadow: var(--glass-shadow), 0 0 22px rgba(180, 76, 255, 0.18); }
+div[class*="st-key-tile_concluidas"] { gap: .35rem; box-sizing: border-box; }
+div[class*="st-key-tile_concluidas"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-tile_concluidas"] .tile-note { margin: 0; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: .15rem .85rem; margin-top: .3rem; color: #a9a9b8; font-size: .72rem; }
+.chart-legend .legenda-item { display: inline-flex; align-items: center; gap: .35rem; }
+.chart-legend i { width: .55rem; height: .55rem; border-radius: 50%; display: inline-block; }
+.chart-legend b { color: #e4e4ee; font-weight: 600; }
+div[class*="st-key-tile_concluidas"] [data-testid="stElementToolbar"] { display: none; }
+
+/* gráfico de metas concluídas: movimento sutil (barras sobem em sequência, valores surgem, a barra atual respira).
+   Cada período do Vega é um g filho de .role-scope (a barra empilhada inteira cresce junto, a partir da base); o texto do SVG já tem transform próprio, então só ganha opacidade. */
+@keyframes barra-sobe { from { transform: scaleY(0); opacity: 0; } }
+@keyframes valor-surge { from { opacity: 0; } }
+@keyframes barra-respira {
+    0%, 100% { filter: drop-shadow(0 0 3px rgba(180, 76, 255, 0.35)); }
+    50% { filter: drop-shadow(0 0 9px rgba(214, 139, 255, 0.85)); }
+}
+@keyframes brilho-respira { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+div[class*="st-key-tile_concluidas"]::before {
+    content: ""; position: absolute; left: -20%; right: -20%; bottom: -35%; height: 75%; z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 100%, rgba(180, 76, 255, 0.28), transparent 65%);
+    animation: brilho-respira 6s ease-in-out infinite;
+}
+div[class*="st-key-tile_concluidas"] .mark-rect.role-mark {
+    transform-box: fill-box; transform-origin: 50% 100%;
+    animation: barra-sobe .75s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+div[class*="st-key-tile_concluidas"] .mark-rect.role-mark path { transition: filter .2s; }
+div[class*="st-key-tile_concluidas"] .mark-rect.role-mark path:hover { filter: brightness(1.3); }
+div[class*="st-key-tile_concluidas"] .mark-text.role-mark text { animation: valor-surge .5s ease-out .6s backwards; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(12) .mark-rect.role-mark {
+    animation: barra-sobe .75s cubic-bezier(.2, .8, .2, 1) .5s backwards, barra-respira 3.6s ease-in-out 1.4s infinite;
+}
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(2) .mark-rect.role-mark { animation-delay: .045s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(3) .mark-rect.role-mark { animation-delay: .09s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(4) .mark-rect.role-mark { animation-delay: .135s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(5) .mark-rect.role-mark { animation-delay: .18s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(6) .mark-rect.role-mark { animation-delay: .225s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(7) .mark-rect.role-mark { animation-delay: .27s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(8) .mark-rect.role-mark { animation-delay: .315s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(9) .mark-rect.role-mark { animation-delay: .36s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(10) .mark-rect.role-mark { animation-delay: .405s; }
+div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(11) .mark-rect.role-mark { animation-delay: .45s; }
 .home-tile.wide { grid-column: span 2; }
 .home-tile.tall { min-height: 230px; }
 .tile-head { display: flex; justify-content: space-between; align-items: center; font-size: .95rem; font-weight: 500; }
@@ -402,12 +459,11 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
     background: var(--atlas-purple-soft); border: 1px solid rgba(180, 76, 255, 0.25); color: #d39bff;
 }
 .tile-ico .material-icon { margin: 0; font-size: 1.1rem; }
-.tile-value { font-size: 2.5rem; font-weight: 600; line-height: 1.1; margin: .5rem 0 .6rem; }
+.tile-value { white-space: nowrap; font-size: 2.5rem; font-weight: 600; line-height: 1.1; margin: .5rem 0 .6rem; }
 .tile-note { color: #8a8a9c; font-size: .78rem; margin: -.25rem 0 .5rem; }
 .tile-line { color: #c9c9d6; font-size: .88rem; margin: .45rem 0; }
 .mini-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .mini-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); box-shadow: 0 0 8px rgba(180, 76, 255, 0.6); }
-.tile-spark { width: 100%; height: 70px; margin-top: .4rem; display: block; }
 /* blocos reservados: esqueleto no lugar do conteúdo futuro */
 .skel { height: 9px; border-radius: 999px; margin: .7rem 0 0; background: rgba(255, 255, 255, 0.07); }
 .skel.s1 { width: 88%; } .skel.s2 { width: 64%; } .skel.s3 { width: 76%; }
@@ -415,12 +471,18 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 .skel-bars i { flex: 1; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, rgba(180, 76, 255, 0.45), rgba(180, 76, 255, 0.08)); }
 .soon { font-size: .72rem; color: var(--atlas-text-dim); border: 1px solid var(--glass-border); border-radius: 999px; padding: .1rem .6rem; }
 
+/* a sidebar ocupa ~290 px: abaixo de 1200 de janela, 3 colunas ficam estreitas (texto quebrando), então vão para 2 */
+@media (max-width: 1199px) {
+    .home-grid, div[class*="st-key-resumo_grid"] { grid-template-columns: repeat(2, 1fr); }
+    div[class*="st-key-tile_concluidas"] { grid-column: 1 / -1; }
+}
 @media (max-width: 900px) {
-    .home-grid { grid-template-columns: 1fr; }
+    .home-grid, div[class*="st-key-resumo_grid"] { grid-template-columns: 1fr; }
     .home-tile.wide { grid-column: auto; }
     .home-hero h1 { font-size: 2.4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
+    div[class*="st-key-tile_concluidas"]::before, div[class*="st-key-tile_concluidas"] svg * { animation: none !important; }
     * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 

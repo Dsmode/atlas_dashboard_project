@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from mysql.connector.errors import IntegrityError
 
 from database.connection import get_cursor
@@ -73,6 +75,42 @@ def contar_metas_no_periodo(inicio, fim):
     return int(linha["concluidas"]), int(linha["total"])
 
 
+def contar_metas_por_periodo(por, quantidade=12, hoje=None):
+    """Metas por semana (domingo a sábado, `por="semana"`) ou mês (`por="mes"`) do prazo.
+
+    Arquivadas e metas sem prazo ficam fora. Devolve os últimos `quantidade` períodos, do mais antigo
+    ao atual, com zero nos vazios: dicts `inicio` (date), `concluidas`, `pendentes` (ativas ainda no
+    prazo) e `atrasadas` (ativas com o prazo vencido, a mesma regra da tela de Metas).
+    """
+    hoje = hoje or date.today()
+    if por == "semana":
+        atual = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
+        inicios = [atual - timedelta(weeks=i) for i in range(quantidade - 1, -1, -1)]
+        # DAYOFWEEK: domingo = 1
+        chave = "prazo - INTERVAL (DAYOFWEEK(prazo) - 1) DAY"
+    elif por == "mes":
+        indice = hoje.year * 12 + hoje.month - 1
+        inicios = [date(i // 12, i % 12 + 1, 1) for i in range(indice - quantidade + 1, indice + 1)]
+        chave = "prazo - INTERVAL (DAYOFMONTH(prazo) - 1) DAY"
+    else:
+        raise ValueError(por)
+    with get_cursor() as cur:
+        cur.execute(
+            f"SELECT {chave} AS inicio, "
+            "COALESCE(SUM(status = 'concluida'), 0) AS concluidas, "
+            "COALESCE(SUM(status = 'ativa' AND prazo >= %s), 0) AS pendentes, "
+            "COALESCE(SUM(status = 'ativa' AND prazo < %s), 0) AS atrasadas "
+            "FROM metas WHERE status IN ('ativa', 'concluida') AND prazo >= %s GROUP BY inicio",
+            (hoje, hoje, inicios[0]),
+        )
+        por_inicio = {l["inicio"]: l for l in cur.fetchall()}
+    vazio = {"concluidas": 0, "pendentes": 0, "atrasadas": 0}
+    return [
+        {"inicio": i, **{k: int(por_inicio.get(i, vazio)[k]) for k in vazio}}
+        for i in inicios
+    ]
+
+
 def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categoria_ids=()):
     """Cria (meta_id=None) ou atualiza a meta e sincroniza o checklist numa só transação.
 
@@ -120,10 +158,12 @@ def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categori
 
 
 def definir_status(meta_id, status):
+    """Concluir grava a data (mantendo a original, se já houver); arquivar a preserva; reativar a zera."""
     with get_cursor() as cur:
         cur.execute(
-            "UPDATE metas SET status=%s, "
-            "data_conclusao = IF(%s = 'concluida', NOW(), NULL) WHERE id=%s",
+            "UPDATE metas SET status=%s, data_conclusao = CASE %s "
+            "WHEN 'concluida' THEN COALESCE(data_conclusao, NOW()) "
+            "WHEN 'arquivada' THEN data_conclusao ELSE NULL END WHERE id=%s",
             (status, status, meta_id),
         )
 

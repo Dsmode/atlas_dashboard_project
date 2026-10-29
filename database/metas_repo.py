@@ -111,24 +111,34 @@ def contar_metas_por_periodo(por, quantidade=12, hoje=None):
     ]
 
 
-def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categoria_ids=()):
+def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categoria_ids=(), progresso=None):
     """Cria (meta_id=None) ou atualiza a meta e sincroniza o checklist numa só transação.
 
     `tarefas` é a lista final, já na ordem desejada: dicts com `id` (None se nova),
     `descricao` e `prazo`. Tarefas do banco que não estão na lista são removidas.
     `categoria_ids` é a seleção final de categorias da meta.
+    `progresso` é None (meta de tarefas) ou um dict com `tipo` (quantidade/valor), `objetivo`, `unidade`,
+    `inicial`, `alvo` e `atual`. Em metas de quantidade/valor as tarefas são ignoradas e as existentes
+    apagadas; em metas de tarefas as colunas de progresso voltam ao padrão.
     """
+    p = progresso or {"tipo": "tarefas", "objetivo": "aumentar", "unidade": None, "inicial": None,
+                      "alvo": None, "atual": None}
+    if p["tipo"] != "tarefas":
+        tarefas = []
+    colunas = (p["tipo"], p["objetivo"], p["unidade"], p["inicial"], p["alvo"], p["atual"])
     with get_cursor() as cur:
         if meta_id is None:
             cur.execute(
-                "INSERT INTO metas (titulo, descricao, prioridade, prazo) VALUES (%s, %s, %s, %s)",
-                (titulo, descricao, prioridade, prazo),
+                "INSERT INTO metas (titulo, descricao, prioridade, prazo, tipo_progresso, objetivo, unidade, "
+                "valor_inicial, valor_alvo, valor_atual) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (titulo, descricao, prioridade, prazo, *colunas),
             )
             meta_id = cur.lastrowid
         else:
             cur.execute(
-                "UPDATE metas SET titulo=%s, descricao=%s, prioridade=%s, prazo=%s WHERE id=%s",
-                (titulo, descricao, prioridade, prazo, meta_id),
+                "UPDATE metas SET titulo=%s, descricao=%s, prioridade=%s, prazo=%s, tipo_progresso=%s, "
+                "objetivo=%s, unidade=%s, valor_inicial=%s, valor_alvo=%s, valor_atual=%s WHERE id=%s",
+                (titulo, descricao, prioridade, prazo, *colunas, meta_id),
             )
             manter = [t["id"] for t in tarefas if t["id"] is not None]
             if manter:
@@ -155,6 +165,34 @@ def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categori
             cur.execute(
                 "INSERT INTO metas_categorias (meta_id, categoria_id) VALUES (%s, %s)", (meta_id, categoria_id)
             )
+
+
+def _valor_atual(cur, meta_id):
+    cur.execute("SELECT valor_atual FROM metas WHERE id=%s", (meta_id,))
+    return cur.fetchone()["valor_atual"]
+
+
+def somar_valor(meta_id, delta, minimo=None):
+    """Soma `delta` ao valor atual (atômico no SQL; `minimo` é o piso, ex.: 0 em quantidade).
+    Devolve o novo valor."""
+    with get_cursor() as cur:
+        if minimo is None:
+            cur.execute("UPDATE metas SET valor_atual = COALESCE(valor_atual, 0) + %s WHERE id=%s", (delta, meta_id))
+        else:
+            cur.execute(
+                "UPDATE metas SET valor_atual = GREATEST(%s, COALESCE(valor_atual, 0) + %s) WHERE id=%s",
+                (minimo, delta, meta_id),
+            )
+        return _valor_atual(cur, meta_id)
+
+
+def definir_valor_atual(meta_id, valor, minimo=None):
+    """Grava o valor atual (digitado pelo usuário); `minimo` é o piso. Devolve o valor gravado."""
+    if minimo is not None:
+        valor = max(valor, minimo)
+    with get_cursor() as cur:
+        cur.execute("UPDATE metas SET valor_atual=%s WHERE id=%s", (valor, meta_id))
+        return _valor_atual(cur, meta_id)
 
 
 def definir_status(meta_id, status):

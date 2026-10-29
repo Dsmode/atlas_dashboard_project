@@ -208,6 +208,40 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 }
 .prog-foot { color: var(--atlas-text-dim); font-size: .78rem; margin-top: .3rem; padding-bottom: .5rem; }
 
+/* ---------- Modos de progresso (quantidade e valor) ---------- */
+.prog-neg { color: #ff7a7a; }
+.meta-ritmo { display: flex; align-items: center; color: var(--atlas-text-dim); font-size: .82rem; margin: 0 0 .7rem 0; }
+.meta-ritmo .material-icon { font-size: 1.05rem; margin-right: .45rem; }
+.val-prefixo { color: var(--atlas-text-dim); font-size: .95rem; font-weight: 500; }
+
+/* faixa "Meta atingida" */
+div[class*="st-key-meta_atingida"] {
+    background: rgba(77, 210, 193, .08); border: 1px solid rgba(77, 210, 193, .35); border-radius: 12px;
+    padding: .45rem .5rem .45rem .9rem; margin-bottom: .7rem;
+}
+div[class*="st-key-meta_atingida"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; color: #7fe3d6; font-size: .9rem; }
+div[class*="st-key-meta_atingida"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+
+/* controles dentro do cartão: [ − ] valor [ + ] e campo de R$ com Adicionar / Remover */
+div[class*="st-key-meta_qtd"], div[class*="st-key-meta_val"] { margin: .1rem 0 .8rem 0; }
+div[class*="st-key-meta_qtd"] { justify-content: center; }
+div[class*="st-key-meta_qtd"] button {
+    width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;
+    transition: background .2s, border-color .2s, color .2s;
+}
+div[class*="st-key-meta_qtd"] button:hover:not(:disabled) {
+    background: var(--atlas-purple-soft); border-color: rgba(180, 76, 255, 0.45); color: #fff;
+}
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInput"] { width: 7.5rem; }
+div[class*="st-key-meta_qtd"] input { text-align: center; font-size: 1.3rem; font-weight: 600; }
+div[class*="st-key-meta_val"] [data-testid="stNumberInput"] { min-width: 8rem; }
+div[class*="st-key-meta_val"] input { font-weight: 500; }
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInputStepUp"],
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInputStepDown"],
+div[class*="st-key-meta_val"] [data-testid="stNumberInputStepUp"],
+div[class*="st-key-meta_val"] [data-testid="stNumberInputStepDown"] { display: none; }
+
 /* o iframe do checklist tem folga interna (para a linha levantada não ser cortada); a margem lateral negativa a compensa */
 iframe[title*="checklist_sortable"] { display: block; width: calc(100% + 24px); max-width: none; margin: 0 -12px; }
 

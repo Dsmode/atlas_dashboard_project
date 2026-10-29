@@ -1,12 +1,14 @@
 import re
 import unicodedata
 from datetime import date, timedelta
+from decimal import Decimal
 from html import escape
 
 import streamlit as st
 
 from components.checklist_sortable import checklist_sortable
 from database import metas_repo as repo
+from database.metas_progresso import LIMITE, fmt_brl, fmt_qtd, progresso, ritmo, validar
 from modules.metas_dados import menu_dados, mostrar_aviso
 
 PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
@@ -30,6 +32,10 @@ FOCAR_NOVA_TAREFA = """<script>
     }, 50);
 })();
 </script>"""
+
+TIPO_ROTULO = {"tarefas": "Tarefas", "quantidade": "Quantidade", "valor": "Valor"}
+OBJETIVO_ROTULO = {"aumentar": "Aumentar", "reduzir": "Reduzir"}
+UNIDADE_MAX = 30
 
 COR_PADRAO_CATEGORIA = "#b44cff"
 COR_GERAL = "#8d8d9c"  # categoria do sistema, sempre disponível
@@ -243,6 +249,9 @@ def _abrir_dialogo(meta=None, tarefas=()):
         "nonce": nonce,
         "meta": meta,
         "categorias": {c["id"] for c in meta["categorias"]} if meta else set(),
+        "tipo": meta["tipo_progresso"] if meta else "tarefas",
+        "objetivo": meta["objetivo"] if meta else "aumentar",
+        "n_tarefas_banco": len(tarefas),
         "cat_modo": None,  # None | "nova" | ("editar", id) | ("excluir", id)
         "proximo_uid": len(tarefas),
         "tarefas": [
@@ -296,6 +305,86 @@ def _editor_tarefas(dlg):
     # Depois de adicionar, o cursor volta ao campo (que é recriado a cada tarefa) para digitar a próxima.
     if dlg.pop("focar_tarefa", False):
         st.html(FOCAR_NOVA_TAREFA, unsafe_allow_javascript=True)
+
+
+def _escolha(rotulos, chave, atual, descricao):
+    """Seletor de uma opção (segmented control) que nunca fica sem escolha: devolve a chave de `rotulos`."""
+    escolhido = st.segmented_control(
+        descricao, list(rotulos.values()), default=rotulos[atual], key=chave, label_visibility="collapsed",
+    )
+    return next((k for k, v in rotulos.items() if v == escolhido), atual)
+
+
+def _campo_numero(rotulo, chave, quantidade, valor, negativo=False):
+    """Campo numérico do progresso: inteiro na quantidade, duas casas (R$) no valor. Devolve Decimal."""
+    if quantidade:
+        return Decimal(int(st.number_input(
+            rotulo, value=int(valor or 0), min_value=0, max_value=int(LIMITE), step=1, format="%d", key=chave,
+        )))
+    numero = st.number_input(
+        rotulo, value=float(valor or 0), min_value=-float(LIMITE) if negativo else 0.0, max_value=float(LIMITE),
+        step=0.01, format="%.2f", key=chave,
+    )
+    return Decimal(str(round(numero, 2)))
+
+
+def _aviso_troca(dlg):
+    """Trocar o tipo de uma meta salva reinicia o progresso; o aviso aparece antes de gravar."""
+    meta = dlg["meta"]
+    if not meta or dlg["tipo"] == meta["tipo_progresso"]:
+        return
+    if meta["tipo_progresso"] != "tarefas":
+        perda = "o valor atual será descartado."
+    elif dlg["n_tarefas_banco"] > 1:
+        perda = f"as {dlg['n_tarefas_banco']} tarefas serão apagadas."
+    elif dlg["n_tarefas_banco"] == 1:
+        perda = "a 1 tarefa será apagada."
+    else:
+        perda = "o progresso atual será descartado."
+    st.warning(f"Trocar o tipo reinicia o progresso: {perda} Só vale ao salvar.")
+
+
+def _secao_progresso(dlg):
+    """Seção Progresso do diálogo. Devolve None (meta de tarefas) ou o dict `progresso` de `salvar_meta`
+    (ainda sem validar: a validação é feita ao salvar)."""
+    meta, n = dlg["meta"], dlg["nonce"]
+    _secao("trending_up", "Progresso")
+    tipo = dlg["tipo"] = _escolha(TIPO_ROTULO, f"dlg_tipo_{n}", dlg["tipo"], "Tipo de progresso")
+    _aviso_troca(dlg)
+    if tipo == "tarefas":
+        return None
+    objetivo = dlg["objetivo"] = _escolha(OBJETIVO_ROTULO, f"dlg_objetivo_{n}", dlg["objetivo"], "Objetivo")
+    salvo = meta if meta and meta["tipo_progresso"] == tipo else None  # tipo trocado: recomeça do zero
+    quantidade = tipo == "quantidade"
+    sufixo = f"{n}_{tipo}"
+    rotulo_valor = "" if quantidade else " (R$)"
+
+    unidade = None
+    if quantidade:
+        col_alvo, col_unidade = st.columns(2)
+        with col_unidade:
+            unidade = st.text_input(
+                "Unidade (opcional)", value=(salvo["unidade"] or "") if salvo else "", max_chars=UNIDADE_MAX,
+                placeholder="livros, km, treinos...", key=f"dlg_unidade_{n}",
+            ).strip() or None
+    else:
+        col_alvo = st.container()
+    with col_alvo:
+        alvo = _campo_numero(f"Alvo{rotulo_valor}", f"dlg_alvo_{sufixo}", quantidade, salvo and salvo["valor_alvo"])
+
+    inicial = atual = None
+    if objetivo == "reduzir":
+        inicial = _campo_numero(
+            f"Valor de partida{rotulo_valor}", f"dlg_inicial_{sufixo}", quantidade, salvo and salvo["valor_inicial"],
+        )
+    if objetivo == "reduzir" and not salvo:
+        atual = inicial  # meta nova: começa na partida
+    else:
+        atual = _campo_numero(
+            f"Valor atual{rotulo_valor}", f"dlg_atual_{sufixo}", quantidade, salvo and salvo["valor_atual"],
+            negativo=not quantidade,
+        )
+    return {"tipo": tipo, "objetivo": objetivo, "unidade": unidade, "inicial": inicial, "alvo": alvo, "atual": atual}
 
 
 def _form_categoria(dlg, categoria=None):
@@ -417,8 +506,10 @@ def _dialogo_meta():
     _secao("label", "Categorias")
     _seletor_categorias(dlg)
 
-    _secao("checklist", "Tarefas")
-    _editor_tarefas(dlg)
+    progresso = _secao_progresso(dlg)
+    if progresso is None:
+        _secao("checklist", "Tarefas")
+        _editor_tarefas(dlg)
 
     st.html('<div class="dlg-rodape-linha"></div>')
     cancelar, salvar = st.columns(2)
@@ -428,9 +519,15 @@ def _dialogo_meta():
         if not titulo.strip():
             st.error("O título é obrigatório.")
             return
+        erro = progresso and validar(
+            progresso["tipo"], progresso["objetivo"], progresso["alvo"], progresso["inicial"], progresso["atual"],
+        )
+        if erro:
+            st.error(erro)
+            return
         repo.salvar_meta(
             meta["id"] if meta else None, titulo.strip(), descricao.strip() or None,
-            prioridade, prazo, dlg["tarefas"], sorted(dlg["categorias"]),
+            prioridade, prazo, dlg["tarefas"], sorted(dlg["categorias"]), progresso,
         )
         st.rerun()
 
@@ -493,10 +590,92 @@ def _acoes(meta, tarefas):
             _pedir_exclusao(meta["id"], meta["titulo"])
 
 
+def _rotulo_progresso(meta, p):
+    """(rótulo, contagem) do cabeçalho da barra: Tarefas 3 / 5, Livros 7 / 12, Valor R$ 1.200,00 / R$ 5.000,00."""
+    tipo = meta["tipo_progresso"]
+    if tipo == "tarefas":
+        return "Tarefas", f"{p['atual']} / {p['alvo']}"
+    if tipo == "valor":
+        return "Valor", f"{fmt_brl(p['atual'])} / {fmt_brl(p['alvo'])}"
+    unidade = meta["unidade"] or "Quantidade"
+    return unidade[:1].upper() + unidade[1:], f"{fmt_qtd(p['atual'])} / {fmt_qtd(p['alvo'])}"
+
+
+def _ajustar_quantidade(meta_id, delta):
+    repo.somar_valor(meta_id, Decimal(delta), minimo=Decimal(0))
+
+
+def _digitou_quantidade(meta_id, chave):
+    digitado = int(st.session_state[chave])
+    if digitado < 0:
+        st.toast("A quantidade não pode ser negativa; ajustei para 0.")
+    repo.definir_valor_atual(meta_id, Decimal(max(digitado, 0)), minimo=Decimal(0))
+
+
+def _controle_quantidade(meta):
+    """[ − ] valor [ + ]: o valor central é um campo editável. O banco é a fonte da verdade: a chave leva o
+    valor atual, então o campo é recriado com o número certo depois de cada gravação."""
+    meta_id = meta["id"]
+    atual = int(meta["valor_atual"] or 0)
+    chave = f"qtd_{meta_id}_{atual}"
+    with st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key=f"meta_qtd_{meta_id}"):
+        st.button("", icon=":material/remove:", key=f"qtd_menos_{meta_id}", help="Diminuir 1",
+                  disabled=atual <= 0, on_click=_ajustar_quantidade, args=(meta_id, -1))
+        st.number_input("Quantidade atual", value=atual, max_value=int(LIMITE), step=1, format="%d", key=chave,
+                        label_visibility="collapsed", on_change=_digitou_quantidade, args=(meta_id, chave))
+        st.button("", icon=":material/add:", key=f"qtd_mais_{meta_id}", help="Aumentar 1",
+                  on_click=_ajustar_quantidade, args=(meta_id, 1))
+
+
+def _aplicar_valor(meta_id, sinal, chave, reinicio):
+    """Adiciona/remove o valor digitado. Lê o campo na hora do clique (o estado do widget já está em dia)."""
+    valor = Decimal(str(round(st.session_state[chave], 2)))
+    if valor <= 0:
+        st.toast("Informe um valor maior que zero.")
+        return
+    delta = valor * sinal
+    novo = repo.somar_valor(meta_id, delta)
+    st.session_state[reinicio] = st.session_state.get(reinicio, 0) + 1  # campo volta a zero
+    if novo < 0 <= novo - delta:
+        st.toast("O saldo ficou negativo.")
+
+
+def _controle_valor(meta):
+    """Campo de valor em R$ com os botões Adicionar/Remover (Acrescentar/Abater em metas de redução)."""
+    meta_id = meta["id"]
+    reinicio = f"val_reinicio_{meta_id}"
+    chave = f"val_{meta_id}_{st.session_state.get(reinicio, 0)}"
+    reduzir = meta["objetivo"] == "reduzir"
+    botoes = [("Abater", "menos", -1, "remove"), ("Acrescentar", "mais", 1, "add")] if reduzir else [
+        ("Adicionar", "mais", 1, "add"), ("Remover", "menos", -1, "remove")]
+    with st.container(horizontal=True, vertical_alignment="center", gap="xsmall", key=f"meta_val_{meta_id}"):
+        st.markdown('<span class="val-prefixo">R$</span>', unsafe_allow_html=True)
+        st.number_input("Valor (R$)", min_value=0.0, max_value=float(LIMITE), step=0.01, format="%.2f", key=chave,
+                        label_visibility="collapsed", width="stretch")
+        for rotulo, nome, sinal, icone in botoes:
+            st.button(rotulo, icon=f":material/{icone}:", key=f"val_{nome}_{meta_id}",
+                      on_click=_aplicar_valor, args=(meta_id, sinal, chave, reinicio))
+
+
+def _faixa_atingida(meta):
+    """Aviso de meta atingida (nada é concluído sozinho): oferece o botão de concluir."""
+    with st.container(horizontal=True, vertical_alignment="center", key=f"meta_atingida_{meta['id']}"):
+        st.markdown(
+            '<span class="material-icon">emoji_events</span>Meta atingida! Concluir?',
+            unsafe_allow_html=True, width="stretch",
+        )
+        if st.button("Concluir meta", type="primary", key=f"atingida_conc_{meta['id']}"):
+            repo.definir_status(meta["id"], "concluida")
+            st.rerun()
+
+
 def _cartao(meta, tarefas, hoje):
+    tipo = meta["tipo_progresso"]
     total = len(tarefas)
     feitas = sum(1 for t in tarefas if t["concluida"])
-    pct = round(feitas / total * 100) if total else 0
+    p = progresso(meta, tarefas)
+    rotulo, contagem = _rotulo_progresso(meta, p)
+    saldo_negativo = tipo == "valor" and p["atual"] < 0
 
     categoria = _categoria(meta, hoje)
     atrasada = categoria == "atrasada"
@@ -519,22 +698,38 @@ def _cartao(meta, tarefas, hoje):
             f'Prazo: {_fmt_data(meta["prazo"])}</span>'
             f'<span class="meta-item prio-{meta["prioridade"]}">'
             f'<span class="material-icon">flag</span>Prioridade {PRIORIDADES[meta["prioridade"]]}</span></div>'
-            f'<div class="prog-head"><span>Tarefas</span><b>{feitas} / {total}</b></div>'
-            f'<div class="prog-track"><div class="prog-fill" style="width:{pct}%"></div></div>'
-            f'<div class="prog-foot">{pct}% concluído</div>',
+            f'<div class="prog-head"><span>{escape(rotulo)}</span>'
+            f'<b class="{"prog-neg" if saldo_negativo else ""}">{contagem}</b></div>'
+            f'<div class="prog-track"><div class="prog-fill" style="width:{p["pct"]}%"></div></div>'
+            f'<div class="prog-foot">{p["pct"]}% concluído'
+            f'{"<span class=prog-neg> · Saldo negativo</span>" if saldo_negativo else ""}</div>',
             unsafe_allow_html=True,
         )
+
+        if meta["status"] == "ativa" and p["atingida"]:
+            _faixa_atingida(meta)
+        texto_ritmo = ritmo(meta, hoje)
+        if texto_ritmo:
+            st.markdown(
+                f'<div class="meta-ritmo"><span class="material-icon">schedule</span>{escape(texto_ritmo)}</div>',
+                unsafe_allow_html=True,
+            )
+
+        if tipo == "quantidade":
+            _controle_quantidade(meta)
+        elif tipo == "valor":
+            _controle_valor(meta)
 
         # Estado de aberto/fechado em session_state: st.expander recolhe a cada rerun.
         abertos = st.session_state.setdefault("checklists_abertos", set())
         aberto = meta["id"] in abertos
-        if total and st.button(
+        if tipo == "tarefas" and total and st.button(
             f"Checklist ({feitas}/{total})", key=f"toggle_check_{meta['id']}", use_container_width=True,
             icon=":material/expand_less:" if aberto else ":material/expand_more:",
         ):
             abertos.symmetric_difference_update({meta["id"]})
             st.rerun()
-        if total and aberto:
+        if tipo == "tarefas" and total and aberto:
             _checklist(meta["id"], tarefas)
 
 

@@ -208,6 +208,57 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 }
 .prog-foot { color: var(--atlas-text-dim); font-size: .78rem; margin-top: .3rem; padding-bottom: .5rem; }
 
+/* ---------- Modos de progresso (quantidade e valor) ---------- */
+.prog-neg { color: #ff7a7a; }
+.meta-ritmo { display: flex; align-items: center; color: var(--atlas-text-dim); font-size: .82rem; margin: 0 0 .7rem 0; }
+.meta-ritmo .material-icon { font-size: 1.05rem; margin-right: .45rem; }
+.val-prefixo { color: var(--atlas-text-dim); font-size: .95rem; font-weight: 500; }
+
+/* meta atingida: o ✓ do topo pulsa em verde neon (o cartão não muda de tamanho) */
+@keyframes neon-concluir {
+    50% { box-shadow: 0 0 12px rgba(57, 255, 156, .85), 0 0 28px rgba(57, 255, 156, .5), inset 0 0 10px rgba(57, 255, 156, .3); }
+}
+div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button {
+    color: #39ff9c; border-color: rgba(57, 255, 156, .8); background: rgba(57, 255, 156, .08);
+    box-shadow: 0 0 8px rgba(57, 255, 156, .6), 0 0 18px rgba(57, 255, 156, .35), inset 0 0 8px rgba(57, 255, 156, .18);
+    animation: neon-concluir 2s ease-in-out infinite;
+}
+div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button:hover {
+    color: #b6ffd9; border-color: #39ff9c; background: rgba(57, 255, 156, .16);
+}
+@media (prefers-reduced-motion: reduce) {
+    div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button { animation: none; }
+}
+
+/* descrição longa: 3 linhas e o botão Ver mais / Ver menos */
+.meta-desc.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: .2rem; }
+div[class*="st-key-desc_toggle"] { margin: 0 0 .8rem 0; }
+div[class*="st-key-desc_toggle"] button {
+    min-height: 0; height: auto; padding: 0; background: none; border: none; color: #d39bff; font-size: .85rem; font-weight: 600;
+}
+div[class*="st-key-desc_toggle"] button:hover { background: none; border: none; color: #fff; }
+
+/* controles dentro do cartão: [ − ] valor [ + ] e campo de R$ com Adicionar / Remover */
+div[class*="st-key-meta_qtd"], div[class*="st-key-meta_val"] { margin: .1rem 0 .8rem 0; }
+div[class*="st-key-meta_qtd"] { justify-content: flex-start; }
+div[class*="st-key-meta_qtd"] > div { flex: 0 0 auto; width: auto; }
+div[class*="st-key-meta_qtd"] button {
+    width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;
+    transition: background .2s, border-color .2s, color .2s;
+}
+div[class*="st-key-meta_qtd"] button:hover:not(:disabled) {
+    background: var(--atlas-purple-soft); border-color: rgba(180, 76, 255, 0.45); color: #fff;
+}
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInput"] { width: 7.5rem; }
+div[class*="st-key-meta_qtd"] input { text-align: center; font-size: 1.3rem; font-weight: 600; }
+div[class*="st-key-meta_val"] [data-testid="stNumberInput"] { min-width: 8rem; }
+div[class*="st-key-meta_val"] input { font-weight: 500; }
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInputStepUp"],
+div[class*="st-key-meta_qtd"] [data-testid="stNumberInputStepDown"],
+div[class*="st-key-meta_val"] [data-testid="stNumberInputStepUp"],
+div[class*="st-key-meta_val"] [data-testid="stNumberInputStepDown"] { display: none; }
+
 /* o iframe do checklist tem folga interna (para a linha levantada não ser cortada); a margem lateral negativa a compensa */
 iframe[title*="checklist_sortable"] { display: block; width: calc(100% + 24px); max-width: none; margin: 0 -12px; }
 

@@ -10,7 +10,13 @@ CREATE TABLE IF NOT EXISTS metas (
     prazo DATE NULL,
     status ENUM('ativa', 'concluida', 'arquivada') NOT NULL DEFAULT 'ativa',
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    data_conclusao DATETIME NULL
+    data_conclusao DATETIME NULL,
+    tipo_progresso ENUM('tarefas', 'quantidade', 'valor') NOT NULL DEFAULT 'tarefas',
+    objetivo ENUM('aumentar', 'reduzir') NOT NULL DEFAULT 'aumentar',
+    unidade VARCHAR(30) NULL,
+    valor_inicial DECIMAL(14, 2) NULL,
+    valor_alvo DECIMAL(14, 2) NULL,
+    valor_atual DECIMAL(14, 2) NULL
 );
 
 CREATE TABLE IF NOT EXISTS tarefas_meta (

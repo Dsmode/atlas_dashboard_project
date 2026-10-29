@@ -8,16 +8,21 @@ import json
 import re
 import unicodedata
 from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from database import metas_repo as repo
 from database.connection import get_cursor
+from database.metas_progresso import LIMITE, OBJETIVOS, TIPOS, fmt_brl, fmt_qtd, validar
 
 FORMATO = "atlas-metas"
-VERSAO = 1
+VERSAO = 2
 TAMANHO_MAX = 10 * 1024 * 1024  # bytes
 
 PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
 STATUS = {"ativa": "Ativa", "concluida": "Concluída", "arquivada": "Arquivada"}
+TIPOS_NOME = {"tarefas": "Tarefas", "quantidade": "Quantidade", "valor": "Valor"}
+CAMPOS_PROGRESSO = ("tipo_progresso", "objetivo", "unidade", "valor_inicial", "valor_alvo", "valor_atual")
+UNIDADE_MAX = 30
 COR_PADRAO = "#b44cff"
 
 TITULO_MAX = 150
@@ -46,6 +51,11 @@ def _data(d):
     return d.isoformat(timespec="seconds") if isinstance(d, datetime) else (d.isoformat() if d else None)
 
 
+def _dinheiro(valor):
+    """Valor decimal como texto ("1200.00"), para o JSON não perder precisão."""
+    return None if valor is None else str(Decimal(valor).quantize(Decimal("0.01")))
+
+
 def carregar_atuais():
     """Metas e categorias do banco no mesmo formato do arquivo lido (as metas trazem também o `id`)."""
     tarefas = {}
@@ -60,6 +70,7 @@ def carregar_atuais():
             "prioridade": m["prioridade"], "prazo": m["prazo"], "status": m["status"],
             "data_criacao": m["data_criacao"], "data_conclusao": m["data_conclusao"],
             "categorias": [c["nome"] for c in m["categorias"]], "tarefas": tarefas.get(m["id"], []),
+            **{campo: m[campo] for campo in CAMPOS_PROGRESSO},
         }
         for m in repo.listar_metas()
     ]
@@ -88,6 +99,9 @@ def exportar_json(agora=None):
                 "prazo": _data(m["prazo"]), "status": m["status"],
                 "data_criacao": _data(m["data_criacao"]), "data_conclusao": _data(m["data_conclusao"]),
                 "categorias": m["categorias"],
+                "tipo_progresso": m["tipo_progresso"], "objetivo": m["objetivo"], "unidade": m["unidade"],
+                "valor_inicial": _dinheiro(m["valor_inicial"]), "valor_alvo": _dinheiro(m["valor_alvo"]),
+                "valor_atual": _dinheiro(m["valor_atual"]),
                 "tarefas": [
                     {
                         "descricao": t["descricao"], "prazo": _data(t["prazo"]), "concluida": t["concluida"],
@@ -141,6 +155,41 @@ def _opcao(valor, validos, padrao, rotulo):
 
 def cor_valida(valor):
     return valor.lower() if isinstance(valor, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", valor) else COR_PADRAO
+
+
+def _decimal(valor, rotulo):
+    """Número do arquivo (inteiro, decimal ou texto numérico) com duas casas; vazio vira None."""
+    if valor is None or valor == "":
+        return None
+    if isinstance(valor, bool) or not isinstance(valor, (int, float, str)):
+        raise ArquivoInvalido(f"{rotulo}: era esperado um número.")
+    try:
+        numero = Decimal(str(valor).strip())
+    except InvalidOperation:
+        raise ArquivoInvalido(f"{rotulo}: número inválido ({str(valor)[:30]!r}).") from None
+    if not numero.is_finite() or abs(numero) > LIMITE:
+        raise ArquivoInvalido(f"{rotulo}: valor grande demais.")
+    return numero.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _progresso(m, r):
+    """Campos de progresso da meta do arquivo, já validados; metas sem tipo (v1) são de tarefas."""
+    tipo = _opcao(m.get("tipo_progresso"), TIPOS, "tarefas", f"{r} (tipo de progresso)")
+    if tipo == "tarefas":
+        return {"tipo_progresso": tipo, "objetivo": "aumentar", "unidade": None,
+                "valor_inicial": None, "valor_alvo": None, "valor_atual": None}
+    objetivo = _opcao(m.get("objetivo"), OBJETIVOS, "aumentar", f"{r} (objetivo)")
+    unidade = _texto(m.get("unidade"), f"{r} (unidade)", UNIDADE_MAX) if tipo == "quantidade" else None
+    inicial = _decimal(m.get("valor_inicial"), f"{r} (valor inicial)") if objetivo == "reduzir" else None
+    alvo = _decimal(m.get("valor_alvo"), f"{r} (alvo)")
+    atual = _decimal(m.get("valor_atual"), f"{r} (valor atual)")
+    if atual is None:
+        atual = inicial if objetivo == "reduzir" else Decimal("0.00")
+    erro = validar(tipo, objetivo, alvo, inicial, atual)
+    if erro:
+        raise ArquivoInvalido(f"{r} (progresso): {erro}")
+    return {"tipo_progresso": tipo, "objetivo": objetivo, "unidade": unidade,
+            "valor_inicial": inicial, "valor_alvo": alvo, "valor_atual": atual}
 
 
 def _lista(valor, rotulo):
@@ -199,7 +248,7 @@ def ler_arquivo(dados):
             "status": _opcao(m.get("status"), STATUS, "ativa", f"{r} (status)"),
             "data_criacao": _quando(m.get("data_criacao"), f"{r} (data de criação)", False),
             "data_conclusao": _quando(m.get("data_conclusao"), f"{r} (data de conclusão)", False),
-            "categorias": [], "tarefas": [],
+            "categorias": [], "tarefas": [], **_progresso(m, r),
         }
         nomes = set()
         for nome in _lista(m.get("categorias"), f"{r} (categorias)"):
@@ -207,7 +256,9 @@ def ler_arquivo(dados):
             if normalizar(nome) not in nomes:
                 nomes.add(normalizar(nome))
                 meta["categorias"].append(registrar(nome))
-        for j, t in enumerate(_lista(m.get("tarefas"), f"{r} (tarefas)"), 1):
+        # metas de quantidade/valor não têm checklist: tarefas do arquivo são ignoradas
+        tarefas_arquivo = _lista(m.get("tarefas"), f"{r} (tarefas)") if meta["tipo_progresso"] == "tarefas" else []
+        for j, t in enumerate(tarefas_arquivo, 1):
             rt = f"{r}, tarefa {j}"
             t = _objeto(t, rt)
             meta["tarefas"].append({
@@ -233,6 +284,7 @@ def _assinatura(meta):
     return (
         meta["titulo"].strip(), (meta["descricao"] or "").strip(), meta["prioridade"], meta["prazo"], meta["status"],
         frozenset(normalizar(n) for n in meta["categorias"]),
+        tuple(meta[campo] for campo in CAMPOS_PROGRESSO),
         tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in meta["tarefas"]),
     )
 
@@ -241,6 +293,20 @@ def _resumo_tarefas(meta):
     total = len(meta["tarefas"])
     feitas = sum(1 for t in meta["tarefas"] if t["concluida"])
     return f"{total} tarefa(s), {feitas} concluída(s)"
+
+
+def _texto_progresso(meta):
+    """Progresso em uma frase: "7 de 12 livros", "R$ 1.200,00 de R$ 5.000,00", "3 de 5 tarefas"."""
+    if meta["tipo_progresso"] == "tarefas":
+        feitas = sum(1 for t in meta["tarefas"] if t["concluida"])
+        return f"{feitas} de {len(meta['tarefas'])} tarefas"
+    mostrar = fmt_brl if meta["tipo_progresso"] == "valor" else fmt_qtd
+    texto = f"{mostrar(meta['valor_atual'])} de {mostrar(meta['valor_alvo'])}"
+    if meta["tipo_progresso"] == "quantidade" and meta["unidade"]:
+        texto += f" {meta['unidade']}"
+    if meta["objetivo"] == "reduzir":
+        texto += f" (reduzir a partir de {mostrar(meta['valor_inicial'])})"
+    return texto
 
 
 def diferencas(atual, importada):
@@ -253,9 +319,15 @@ def diferencas(atual, importada):
         ("Categorias", lambda m: ", ".join(sorted(m["categorias"], key=normalizar)) or "nenhuma"),
     ]
     saida = [(rotulo, f(atual), f(importada)) for rotulo, f in campos if f(atual) != f(importada)]
-    tarefas = lambda m: tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in m["tarefas"])
-    if tarefas(atual) != tarefas(importada):
-        saida.append(("Tarefas", _resumo_tarefas(atual), _resumo_tarefas(importada)))
+    tipos = (atual["tipo_progresso"], importada["tipo_progresso"])
+    if tipos[0] != tipos[1]:
+        saida.append(("Tipo de progresso", TIPOS_NOME[tipos[0]], TIPOS_NOME[tipos[1]]))
+    if tipos == ("tarefas", "tarefas"):
+        tarefas = lambda m: tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in m["tarefas"])
+        if tarefas(atual) != tarefas(importada):
+            saida.append(("Tarefas", _resumo_tarefas(atual), _resumo_tarefas(importada)))
+    elif _texto_progresso(atual) != _texto_progresso(importada):
+        saida.append(("Progresso", _texto_progresso(atual), _texto_progresso(importada)))
     return saida
 
 
@@ -326,10 +398,11 @@ def _gravar_filhos(cur, meta_id, meta, ids_categoria):
 
 def _inserir_meta(cur, meta, ids_categoria):
     cur.execute(
-        "INSERT INTO metas (titulo, descricao, prioridade, prazo, status, data_criacao, data_conclusao) "
-        "VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), %s)",
+        "INSERT INTO metas (titulo, descricao, prioridade, prazo, status, data_criacao, data_conclusao, "
+        "tipo_progresso, objetivo, unidade, valor_inicial, valor_alvo, valor_atual) "
+        "VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), %s, %s, %s, %s, %s, %s, %s)",
         (meta["titulo"], meta["descricao"], meta["prioridade"], meta["prazo"], meta["status"],
-         meta["data_criacao"], meta["data_conclusao"]),
+         meta["data_criacao"], meta["data_conclusao"], *(meta[campo] for campo in CAMPOS_PROGRESSO)),
     )
     _gravar_filhos(cur, cur.lastrowid, meta, ids_categoria)
 
@@ -338,9 +411,10 @@ def _substituir_meta(cur, meta_id, meta, ids_categoria):
     """A meta do banco passa a ser a importada por inteiro: campos, datas, categorias e tarefas."""
     cur.execute(
         "UPDATE metas SET titulo=%s, descricao=%s, prioridade=%s, prazo=%s, status=%s, "
-        "data_criacao=COALESCE(%s, data_criacao), data_conclusao=%s WHERE id=%s",
+        "data_criacao=COALESCE(%s, data_criacao), data_conclusao=%s, tipo_progresso=%s, objetivo=%s, "
+        "unidade=%s, valor_inicial=%s, valor_alvo=%s, valor_atual=%s WHERE id=%s",
         (meta["titulo"], meta["descricao"], meta["prioridade"], meta["prazo"], meta["status"],
-         meta["data_criacao"], meta["data_conclusao"], meta_id),
+         meta["data_criacao"], meta["data_conclusao"], *(meta[campo] for campo in CAMPOS_PROGRESSO), meta_id),
     )
     cur.execute("DELETE FROM tarefas_meta WHERE meta_id=%s", (meta_id,))
     cur.execute("DELETE FROM metas_categorias WHERE meta_id=%s", (meta_id,))

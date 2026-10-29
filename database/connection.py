@@ -35,6 +35,22 @@ def _migrar(cur):
     if cur.fetchone()[0] == 0:
         cur.execute("ALTER TABLE tarefas_meta ADD COLUMN ordem INT NOT NULL DEFAULT 0 AFTER prazo")
         cur.execute("UPDATE tarefas_meta SET ordem = id")
+    # modos de progresso das metas (tarefas, quantidade, valor); as metas antigas ficam como "tarefas"
+    for coluna, definicao in (
+        ("tipo_progresso", "ENUM('tarefas', 'quantidade', 'valor') NOT NULL DEFAULT 'tarefas'"),
+        ("objetivo", "ENUM('aumentar', 'reduzir') NOT NULL DEFAULT 'aumentar'"),
+        ("unidade", "VARCHAR(30) NULL"),
+        ("valor_inicial", "DECIMAL(14, 2) NULL"),
+        ("valor_alvo", "DECIMAL(14, 2) NULL"),
+        ("valor_atual", "DECIMAL(14, 2) NULL"),
+    ):
+        cur.execute(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='metas' AND COLUMN_NAME=%s",
+            (DB_NAME, coluna),
+        )
+        if cur.fetchone()[0] == 0:
+            cur.execute(f"ALTER TABLE metas ADD COLUMN {coluna} {definicao}")
 
 
 def init_db():

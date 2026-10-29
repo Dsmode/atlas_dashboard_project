@@ -4,7 +4,7 @@ Dashboard pessoal modular (Python + Streamlit + MySQL), com interface HUD em tem
 
 ## Módulos (ferramentas)
 - **Início:** logo, data e hora atuais, resumo do painel (Metas Semanais e gráfico empilhado de metas concluídas, pendentes e atrasadas por semana ou por mês, ambos com dados reais) e blocos reservados para as próximas ferramentas.
-- **Metas Pessoais:** cadastro, edição e exclusão de metas, checklist de tarefas com arrastar para reordenar, prazos, prioridade, categorias coloridas criadas pelo usuário (várias por meta), painéis de métricas (semanais, mensais e atrasadas), busca por título e descrição, filtro por categorias e exportação/importação dos dados em JSON (com mesclagem e tratamento de duplicadas).
+- **Metas Pessoais:** cadastro, edição e exclusão de metas com três tipos de progresso (checklist de tarefas com arrastar para reordenar, quantidade com botões −/+ e valor em R$ com adicionar/remover, inclusive metas de redução, aviso de meta atingida e ritmo até o prazo), prazos, prioridade, categorias coloridas criadas pelo usuário (várias por meta), painéis de métricas (semanais, mensais e atrasadas), busca por título e descrição, filtro por categorias e exportação/importação dos dados em JSON (com mesclagem e tratamento de duplicadas).
 
 ## Executar
 1. Inicie o MySQL (`net start MySQL80` em terminal administrador).

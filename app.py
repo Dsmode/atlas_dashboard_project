@@ -50,6 +50,7 @@ with st.sidebar:
         if st.button(nome, icon=icone, key=f"nav_{nome}", use_container_width=True,
                      type="primary" if ativo else "secondary"):
             st.session_state.pagina = nome
+            metas.recolher_cartoes()
             st.rerun()
 
 MODULOS[st.session_state.pagina][1]()

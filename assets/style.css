@@ -214,17 +214,34 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 .meta-ritmo .material-icon { font-size: 1.05rem; margin-right: .45rem; }
 .val-prefixo { color: var(--atlas-text-dim); font-size: .95rem; font-weight: 500; }
 
-/* faixa "Meta atingida" */
-div[class*="st-key-meta_atingida"] {
-    background: rgba(77, 210, 193, .08); border: 1px solid rgba(77, 210, 193, .35); border-radius: 12px;
-    padding: .45rem .5rem .45rem .9rem; margin-bottom: .7rem;
+/* meta atingida: o ✓ do topo pulsa em verde neon (o cartão não muda de tamanho) */
+@keyframes neon-concluir {
+    50% { box-shadow: 0 0 12px rgba(57, 255, 156, .85), 0 0 28px rgba(57, 255, 156, .5), inset 0 0 10px rgba(57, 255, 156, .3); }
 }
-div[class*="st-key-meta_atingida"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; color: #7fe3d6; font-size: .9rem; }
-div[class*="st-key-meta_atingida"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button {
+    color: #39ff9c; border-color: rgba(57, 255, 156, .8); background: rgba(57, 255, 156, .08);
+    box-shadow: 0 0 8px rgba(57, 255, 156, .6), 0 0 18px rgba(57, 255, 156, .35), inset 0 0 8px rgba(57, 255, 156, .18);
+    animation: neon-concluir 2s ease-in-out infinite;
+}
+div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button:hover {
+    color: #b6ffd9; border-color: #39ff9c; background: rgba(57, 255, 156, .16);
+}
+@media (prefers-reduced-motion: reduce) {
+    div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button { animation: none; }
+}
+
+/* descrição longa: 3 linhas e o botão Ver mais / Ver menos */
+.meta-desc.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: .2rem; }
+div[class*="st-key-desc_toggle"] { margin: 0 0 .8rem 0; }
+div[class*="st-key-desc_toggle"] button {
+    min-height: 0; height: auto; padding: 0; background: none; border: none; color: #d39bff; font-size: .85rem; font-weight: 600;
+}
+div[class*="st-key-desc_toggle"] button:hover { background: none; border: none; color: #fff; }
 
 /* controles dentro do cartão: [ − ] valor [ + ] e campo de R$ com Adicionar / Remover */
 div[class*="st-key-meta_qtd"], div[class*="st-key-meta_val"] { margin: .1rem 0 .8rem 0; }
-div[class*="st-key-meta_qtd"] { justify-content: center; }
+div[class*="st-key-meta_qtd"] { justify-content: flex-start; }
+div[class*="st-key-meta_qtd"] > div { flex: 0 0 auto; width: auto; }
 div[class*="st-key-meta_qtd"] button {
     width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; border-radius: 12px;
     background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;

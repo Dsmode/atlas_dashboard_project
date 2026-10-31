@@ -4,8 +4,9 @@
 .fin-resumo {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
     background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border); border-radius: 14px; box-shadow: var(--glass-shadow);
-    padding: .6rem .4rem; margin-bottom: .35rem;
+    border: 1px solid rgba(190, 120, 255, 0.24); border-radius: 14px;
+    box-shadow: var(--glass-shadow), 0 0 18px -8px rgba(180, 76, 255, 0.5);
+    padding: .6rem .4rem;
 }
 .fin-resumo-item {
     --tom: #d39bff;
@@ -35,6 +36,10 @@
 .fin-resumo-item.entrada .fin-resumo-valor, .fin-resumo-item.saida .fin-resumo-valor,
 .fin-resumo-item.saldo.positivo .fin-resumo-valor, .fin-resumo-item.saldo.negativo .fin-resumo-valor,
 .fin-resumo-item.pct.acima .fin-resumo-valor { color: var(--tom); }
+.fin-resumo-item.entrada .fin-resumo-valor, .fin-resumo-item.saida .fin-resumo-valor,
+.fin-resumo-item.saldo.positivo .fin-resumo-valor, .fin-resumo-item.saldo.negativo .fin-resumo-valor {
+    text-shadow: 0 0 6px color-mix(in srgb, var(--tom) 20%, transparent);
+}
 .fin-resumo-item.sem-renda .fin-resumo-valor { color: var(--atlas-text-dim); }
 /* barrinha do % da renda gasta (passa de 100%: fica vermelha e cheia) */
 .fin-resumo-barra { display: block; height: 4px; margin-top: .3rem; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
@@ -46,9 +51,12 @@
 }
 .fin-resumo-barra.vazia i { width: 0; }
 
+/* a faixa de resumo tem a margem do markdown zerada pelo mesmo motivo do base.css */
+.st-key-fin_dash > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+
 /* grade 2 × 2 de cartões; cada cartão vem embrulhado num stLayoutWrapper, que vira a célula da grade */
 div[class*="st-key-fin_dash_grade"] {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; align-items: stretch;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fin-gap); align-items: stretch;
 }
 div[class*="st-key-fin_dash_grade"] > [data-testid="stLayoutWrapper"] { display: flex; flex-direction: column; min-width: 0; }
 div[class*="st-key-fin_card_dash"] { gap: .55rem; position: relative; overflow: hidden; isolation: isolate; }
@@ -97,7 +105,15 @@ div[class*="st-key-fin_dash_rosca_corpo"] > [data-testid="stElementContainer"]:h
 }
 div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path,
 div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path { transition: filter .2s; }
+/* neon dos gráficos: o mesmo halo roxo nas colunas, nas barras do Top 5 (o trilho fica de fora) e nos pontos do fluxo;
+   a rosca e a linha do fluxo ficam sem brilho.
+   O halo sai do formato da marca e é multiplicado pela opacidade dela: por isso um tom único e firme */
+div[class*="st-key-fin_card_dash"] { --fin-neon: drop-shadow(0 0 3px rgba(190, 110, 255, 0.55)) drop-shadow(0 0 8px rgba(190, 110, 255, 0.5)); }
+div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark path,
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path,
+div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:not(:last-child) { filter: var(--fin-neon); }
 div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path:hover,
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path:hover { filter: brightness(1.25) var(--fin-neon); }
 div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path:hover { filter: brightness(1.25); }
 /* Entradas × Saídas: as colunas sobem a partir da base */
 div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark {
@@ -117,7 +133,7 @@ div[class*="st-key-fin_card_dash_fluxo"] .mark-area.role-mark { animation: fin-r
 div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark { animation: fin-aparece .4s ease-out .8s backwards; }
 div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:last-child { animation: fin-pulsa 3.4s ease-in-out 1.3s infinite; }
 /* top 5: as barras (não o trilho, que é a primeira camada) esticam da esquerda; os valores surgem depois */
-div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark ~ .mark-rect.role-mark {
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks {
     transform-box: fill-box; transform-origin: 0% 50%;
     animation: fin-estica .75s cubic-bezier(.2, .8, .2, 1) backwards;
 }

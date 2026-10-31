@@ -3,7 +3,14 @@
 .block-container:has(div[class*="st-key-fin_raiz"]) { max-width: 1440px; }
 
 /* cores do módulo (as mesmas de comum.py) */
-:root { --fin-entrada: #4dd2a0; --fin-saida: #ff6b7a; --fin-destaque: #d39bff; }
+:root { --fin-entrada: #4dd2a0; --fin-saida: #ff6b7a; --fin-destaque: #d39bff; --fin-gap: 1.1rem; }
+
+/* um só espaço vertical entre os blocos do módulo (cabeçalho, abas, resumo e cartões) */
+.st-key-fin_raiz, .st-key-fin_dash, [class*="st-key-fin_corpo_"] { gap: var(--fin-gap); }
+/* colunas que levam cartões (Extrato e Importar) usam o mesmo espaço entre si */
+[data-testid="stHorizontalBlock"]:has([class*="st-key-fin_card_ext"]), [data-testid="stHorizontalBlock"]:has([class*="st-key-fin_card_imp"]) { gap: var(--fin-gap); }
+/* o Streamlit dá margem de -16px ao markdown (compensa o <p>): sem zerar, o bloco invade o espaço abaixo dele */
+[class*="st-key-fin_corpo_"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 
 /* botão "fantasma": vidro discreto que acende em roxo no hover (mês, engrenagem, Filtros, Copiar) */
 div[class*="st-key-fin_mes_nav"] button, div[class*="st-key-fin_config"] button,
@@ -50,7 +57,7 @@ div[class*="st-key-fin_config"] button { width: 2.3rem; height: 2.3rem; min-heig
 div[class*="st-key-fin_topo_acoes"] { flex-wrap: nowrap; }
 
 /* abas: três botões grandes; a ativa em roxo neon (mesma linguagem do menu lateral) */
-div[class*="st-key-fin_abas"] { margin: .4rem 0 1.1rem; }
+div[class*="st-key-fin_abas"] { margin: 0; }
 div[class*="st-key-fin_abas"] button {
     height: 3rem; border-radius: 14px; font-size: 1.02rem; font-weight: 500;
     background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
@@ -63,6 +70,9 @@ div[class*="st-key-fin_abas"] button[kind="primary"] {
     border-color: rgba(180, 76, 255, 0.75); color: #fff;
     box-shadow: 0 0 22px rgba(180, 76, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
+
+/* as abas inativas são st.empty() (ver __init__.py): sem espaço entre os blocos */
+div[data-testid="stElementContainer"]:empty { display: none; }
 
 /* cartões do módulo: st.container(key="fin_card_<nome>"). Lado a lado (colunas ou grade), ficam com a
    mesma altura: o invólucro do cartão (stLayoutWrapper) estica e o cartão ocupa tudo */
@@ -91,13 +101,13 @@ div[class*="st-key-fin_card"] [data-testid="stElementToolbar"] { display: none; 
     border-radius: 7px; background: var(--banco); color: #fff; font-size: .68rem; font-weight: 700;
     box-shadow: 0 0 10px -2px var(--banco);
 }
-.fin-banco.dinheiro .material-icon { margin: 0; font-size: 1.25rem; }
+.fin-banco.dinheiro b { --banco: #2fae83; }  /* mesmo selo dos bancos, com o ícone no lugar da sigla */
+.fin-banco b .material-icon { margin: 0; font-size: 1.05rem; }
 .fin-forma { display: inline-flex; align-items: center; font-size: .85rem; white-space: nowrap; }
 .fin-forma .material-icon { font-size: 1rem; color: var(--atlas-text-dim); }
 .fin-valor { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .fin-valor.entrada { color: var(--fin-entrada); }
 .fin-valor.saida { color: var(--fin-saida); }
-.fin-banco.dinheiro .material-icon { color: var(--fin-entrada); }
 
 /* descrição do lançamento em uma linha com reticências e a categoria embaixo; sem descrição, a categoria é o texto */
 .fin-desc { display: flex; flex-direction: column; gap: .12rem; line-height: 1.25; min-width: 0; }
@@ -112,3 +122,29 @@ div[class*="st-key-fin_card"] [data-testid="stElementToolbar"] { display: none; 
     text-transform: uppercase; background: var(--atlas-purple-soft); color: var(--fin-destaque);
 }
 .fin-vazio { color: var(--atlas-text-dim); }
+
+/* ---------- brilho neon discreto: halo roxo em bordas, títulos e tabelas; entradas/saídas só com um toque ---------- */
+div[class*="st-key-fin_card"] {
+    border-color: rgba(190, 120, 255, 0.24);
+    box-shadow: var(--glass-shadow), 0 0 18px -8px rgba(180, 76, 255, 0.5);
+}
+div[class*="st-key-fin_card"]:hover {
+    border-color: rgba(180, 76, 255, 0.55);
+    box-shadow: var(--glass-shadow), 0 0 24px -6px rgba(180, 76, 255, 0.4);
+}
+.fin-card-ico { text-shadow: 0 0 10px rgba(211, 155, 255, 0.8); }
+.fin-card-titulo { text-shadow: 0 0 12px rgba(180, 76, 255, 0.4); }
+div[class*="st-key-fin_mes_nav"] button:hover, div[class*="st-key-fin_config"] button:hover,
+div[class*="st-key-fin_ext_filtros"] button:hover, div[class*="st-key-fin_ext_copiar"] button:hover {
+    box-shadow: 0 0 14px -4px rgba(180, 76, 255, 0.6);
+}
+div[class*="st-key-fin_abas"] button:hover { box-shadow: 0 0 16px -6px rgba(180, 76, 255, 0.55); }
+/* tabelas: filete do cabeçalho aceso, linhas com um halo ao passar o mouse */
+.fin-ext-cab { border-bottom-color: rgba(180, 76, 255, 0.34); box-shadow: 0 7px 10px -9px rgba(180, 76, 255, 0.6); }
+div[class*="st-key-fin_ext_lin_"]:hover, div[class*="st-key-fin_cfg_lin_"]:hover {
+    box-shadow: inset 0 0 16px -6px rgba(180, 76, 255, 0.25);
+}
+/* cores de entrada e saída: o brilho é bem menor que o do roxo */
+.fin-valor.entrada, .fin-ext-total.entrada { text-shadow: 0 0 6px color-mix(in srgb, var(--fin-entrada) 20%, transparent); }
+.fin-valor.saida, .fin-ext-total.saida { text-shadow: 0 0 6px color-mix(in srgb, var(--fin-saida) 20%, transparent); }
+.fin-chip i { box-shadow: 0 0 8px var(--cat); }

@@ -1,6 +1,6 @@
 /* ---------- Controle Financeiro: aba Importar (prévia, tudo desabilitado) ---------- */
 .fin-imp-aviso {
-    display: flex; align-items: center; gap: .85rem; margin-bottom: 1rem; padding: .8rem 1.1rem;
+    display: flex; align-items: center; gap: .85rem; padding: .8rem 1.1rem;
     border-radius: 14px; border: 1px solid rgba(255, 209, 102, .35); background: rgba(255, 209, 102, .07);
 }
 .fin-imp-aviso > .material-icon { margin: 0; font-size: 1.6rem; color: #ffd166; }
@@ -8,7 +8,7 @@
 .fin-imp-aviso span { color: #c9c9d6; font-size: .88rem; }
 
 /* os dois cartões de cima ficam com a mesma altura pela regra comum do base.css */
-div[class*="st-key-fin_card_imp_historico"] { margin-top: 1rem; }
+div[class*="st-key-fin_card_imp_historico"] { margin-top: 0; }
 
 .fin-imp-soltar {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem;

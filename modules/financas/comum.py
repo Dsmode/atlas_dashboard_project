@@ -63,9 +63,9 @@ def selo_banco(sigla, nome, cor_banco):
 
 
 def banco_html(lancamento):
-    """Banco do lançamento; dinheiro tem ícone próprio e lançamento sem banco mostra um traço."""
+    """Banco do lançamento; dinheiro tem o ícone dentro do mesmo selo dos bancos e lançamento sem banco mostra um traço."""
     if lancamento["forma"] == "dinheiro":
-        return f'<span class="fin-banco dinheiro">{icone("payments")}<span>Dinheiro</span></span>'
+        return f'<span class="fin-banco dinheiro"><b>{icone("payments")}</b><span>Dinheiro</span></span>'
     if lancamento.get("banco_id") is None:
         return '<span class="fin-vazio">—</span>'
     return selo_banco(lancamento["banco_sigla"], lancamento["banco_nome"], lancamento["banco_cor"])

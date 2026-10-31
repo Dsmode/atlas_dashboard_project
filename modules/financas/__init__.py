@@ -1,5 +1,5 @@
 """Controle Financeiro: cabeçalho com o mês ativo, engrenagem e as abas Dashboard, Extrato e Importar."""
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
@@ -29,16 +29,6 @@ def _css():
     Vai por st.markdown: um st.html só com <style> não chegou ao DOM no navegador."""
     versao = tuple((p.name, p.stat().st_mtime_ns) for p in sorted(CSS_DIR.glob("*.css")))
     st.markdown(f"<style>{_ler_css(versao)}</style>", unsafe_allow_html=True)
-
-
-@st.fragment(run_every="30s")
-def _relogio():
-    agora = datetime.now()
-    st.markdown(
-        f'<div class="home-clock"><span class="material-icon">calendar_today</span>'
-        f'{agora.day} de {calc.MESES_CURTOS[agora.month - 1]}. de {agora.year}, {agora:%H:%M}</div>',
-        unsafe_allow_html=True,
-    )
 
 
 # ---------- mês ativo (aba e mês ficam em session_state: sobrevivem à troca de módulo) ----------
@@ -83,7 +73,6 @@ def _abas():
 
 def render():
     _css()
-    _relogio()
     with st.container(key="fin_raiz"):
         topo, acoes = st.columns([3, 2], vertical_alignment="center")
         topo.markdown(
@@ -97,4 +86,8 @@ def render():
             if st.button("", icon=":material/settings:", key="fin_config", help="Configurações de finanças"):
                 configuracoes.abrir()
         aba = _abas()
-        ABAS[aba][2](mes_ativo())
+        # cada aba tem a sua posição na página e todas são criadas antes de desenhar: as inativas viram st.empty(),
+        # o que apaga na hora o que a aba anterior desenhou (o Streamlit a manteria na tela até a nova terminar)
+        corpos = {chave: st.container(key=f"fin_corpo_{chave}") if chave == aba else st.empty() for chave in ABAS}
+        with corpos[aba]:
+            ABAS[aba][2](mes_ativo())

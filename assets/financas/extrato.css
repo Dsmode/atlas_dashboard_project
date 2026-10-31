@@ -1,10 +1,9 @@
 /* ---------- Controle Financeiro: aba Extrato ---------- */
 /* grade 2×2 (a mesma altura por linha vem do base.css); o cartão é contêiner das consultas de largura */
 div[class*="st-key-fin_card_ext_"] { container-type: inline-size; }
-div[class*="st-key-fin_ext_grade"] { gap: 1.1rem; }
+div[class*="st-key-fin_ext_grade"] { gap: var(--fin-gap); }
 
-/* botão Filtros acima da grade, à direita */
-div[class*="st-key-fin_ext_barra"] { margin: -.4rem 0 .2rem; }
+/* botão Filtros acima da grade, à direita (o espaço vem do gap do módulo) */
 div[class*="st-key-fin_ext_filtros"] button { min-height: 0; height: 2.3rem; border-radius: 10px; font-weight: 500; }
 div[data-testid="stPopoverBody"]:has([class*="st-key-fin_flt_limpar"]) { min-width: 22rem; max-width: 30rem; }
 /* o popover fica aberto no navegador quando um diálogo abre: esconde só ele */
@@ -80,7 +79,6 @@ div[class*="st-key-fin_ext_bobs_"] button:disabled { opacity: .28; background: t
 @container (max-width: 500px) {
     div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.4rem minmax(0, 1fr) 6rem 1.3rem 1.8rem; }
     .fin-ext-banco .fin-banco > span { display: none; }
-    .fin-ext-banco .fin-banco.dinheiro .material-icon { margin: 0; }
 }
 
 /* ---------- formulário ---------- */

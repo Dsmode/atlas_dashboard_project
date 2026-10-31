@@ -1,0 +1,59 @@
+/* ---------- Controle Financeiro: diálogo de configurações (engrenagem) ---------- */
+/* seletores de seção e de tipo ocupam a largura toda */
+div[data-testid="stDialog"] div[class*="st-key-fin_cfg_secao_"] [data-testid="stButtonGroup"],
+div[data-testid="stDialog"] div[class*="st-key-fin_cfg_tipo_"] [data-testid="stButtonGroup"] { width: 100%; }
+div[data-testid="stDialog"] div[class*="st-key-fin_cfg_secao_"] button,
+div[data-testid="stDialog"] div[class*="st-key-fin_cfg_tipo_"] button { flex: 1; }
+div[data-testid="stDialog"] div[class*="st-key-fin_cfg_tipo_"] { margin-top: .4rem; }
+div[class*="st-key-fin_cfg_corpo_"] { gap: .35rem; }
+
+/* aviso de sucesso (aparece uma vez, depois de salvar/excluir) */
+.fin-cfg-ok {
+    display: flex; align-items: center; gap: .5rem; margin: .5rem 0 .2rem; padding: .5rem .8rem;
+    border-radius: 10px; font-size: .86rem; color: #7fe3c4;
+    background: rgba(77, 210, 160, 0.09); border: 1px solid rgba(77, 210, 160, 0.3);
+}
+.fin-cfg-ok .material-icon { margin: 0; color: var(--fin-entrada); }
+
+/* item da lista (categoria ou banco): linha de vidro com as ações à direita */
+div[class*="st-key-fin_cfg_lin_"] { padding: .3rem .4rem .3rem .85rem; }
+div[class*="st-key-fin_cfg_lin_"] > div:first-child { min-width: 0; }
+div[class*="st-key-fin_cfg_lin_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-fin_cfg_lin_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
+.fin-cfg-item { display: flex; align-items: center; gap: .6rem; min-width: 0; font-size: .92rem; }
+.fin-cfg-ponto {
+    flex: none; width: .8rem; height: .8rem; border-radius: 50%; background: var(--cor); box-shadow: 0 0 8px var(--cor);
+}
+.fin-cfg-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ececf1; }
+.fin-cfg-item .fin-banco { min-width: 0; }
+.fin-cfg-item .fin-banco > span { overflow: hidden; text-overflow: ellipsis; color: #ececf1; font-size: .92rem; }
+.fin-cfg-cadeado { margin: 0; font-size: .95rem; color: var(--atlas-text-dim); }
+.fin-cfg-uso { margin-left: auto; flex: none; padding-left: .8rem; color: var(--atlas-text-dim); font-size: .78rem; white-space: nowrap; }
+.fin-cfg-item .fin-selo { background: rgba(255, 255, 255, 0.06); color: var(--atlas-text-dim); }
+.fin-cfg-item.inativo .fin-banco { opacity: .5; }
+
+/* ações do item (visual comum no base.css) */
+div[class*="st-key-fin_cfg_acoes_"] { flex: none; flex-wrap: nowrap; }
+div[class*="st-key-fin_cfg_acoes_"] button { width: 1.9rem; height: 1.9rem; }
+div[class*="st-key-fin_cfg_acoes_"] button [data-testid="stIconMaterial"] { font-size: 1.1rem; }
+
+/* formulário em linha (editar/adicionar) e confirmação de exclusão */
+div[class*="st-key-fin_cfg_form_"], div[class*="st-key-fin_cfg_conf_"] {
+    padding: .6rem .85rem .75rem; border-radius: 12px;
+    background: rgba(180, 76, 255, 0.06); border: 1px solid rgba(180, 76, 255, 0.4);
+    box-shadow: 0 0 18px -8px rgba(180, 76, 255, 0.5);
+}
+div[class*="st-key-fin_cfg_conf_"] { background: rgba(255, 77, 77, 0.06); border-color: rgba(255, 77, 77, 0.38); box-shadow: none; }
+div[class*="st-key-fin_cfg_conf_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+.fin-cfg-alerta { display: flex; align-items: flex-start; gap: .55rem; font-size: .9rem; color: #e6e6ee; line-height: 1.4; }
+.fin-cfg-alerta .material-icon { margin: .05rem 0 0; color: #ff8b8b; }
+
+/* botões "Adicionar": contorno tracejado roxo, como o "Adicionar" de categorias das Metas */
+div[class*="st-key-fin_cfg_add_"] button {
+    border: 1px dashed rgba(180, 76, 255, 0.6); background: transparent; color: var(--fin-destaque); font-weight: 600;
+    transition: background .2s, color .2s;
+}
+div[class*="st-key-fin_cfg_add_"] button:hover { background: var(--atlas-purple-soft); color: #fff; }
+
+/* geral: campo do saldo e o Salvar na mesma linha */
+div[class*="st-key-fin_cfg_saldo_ok_"] button { height: 2.5rem; }

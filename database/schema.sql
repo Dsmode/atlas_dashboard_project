@@ -44,3 +44,43 @@ CREATE TABLE IF NOT EXISTS metas_categorias (
     FOREIGN KEY (meta_id) REFERENCES metas (id) ON DELETE CASCADE,
     FOREIGN KEY (categoria_id) REFERENCES categorias_meta (id) ON DELETE CASCADE
 );
+
+-- Controle Financeiro: tabelas próprias, sem ligação com as Metas Pessoais
+
+CREATE TABLE IF NOT EXISTS fin_categorias (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('entrada', 'gasto') NOT NULL,
+    nome VARCHAR(30) NOT NULL,
+    cor CHAR(7) NOT NULL DEFAULT '#b44cff',
+    protegida TINYINT(1) NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_fin_categoria (tipo, nome)
+);
+
+CREATE TABLE IF NOT EXISTS fin_bancos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(30) NOT NULL UNIQUE,
+    sigla VARCHAR(3) NOT NULL,
+    cor CHAR(7) NOT NULL DEFAULT '#b44cff',
+    ativo TINYINT(1) NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS fin_lancamentos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('entrada', 'fixo', 'variavel') NOT NULL,
+    data DATE NOT NULL,
+    descricao VARCHAR(80) NULL,
+    categoria_id INT NOT NULL,
+    valor DECIMAL(14, 2) NOT NULL,
+    forma ENUM('pix', 'debito', 'credito', 'dinheiro') NOT NULL,
+    banco_id INT NULL,
+    observacao VARCHAR(255) NULL,
+    data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_fin_lancamentos_data (data),
+    FOREIGN KEY (categoria_id) REFERENCES fin_categorias (id),
+    FOREIGN KEY (banco_id) REFERENCES fin_bancos (id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS fin_config (
+    chave VARCHAR(40) PRIMARY KEY,
+    valor VARCHAR(255) NOT NULL
+);

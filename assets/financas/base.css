@@ -1,0 +1,114 @@
+/* ---------- Controle Financeiro: base (cabeçalho, abas, cartões e peças comuns) ---------- */
+/* o Extrato tem quatro blocos lado a lado: só neste módulo a área principal fica mais larga */
+.block-container:has(div[class*="st-key-fin_raiz"]) { max-width: 1440px; }
+
+/* cores do módulo (as mesmas de comum.py) */
+:root { --fin-entrada: #4dd2a0; --fin-saida: #ff6b7a; --fin-destaque: #d39bff; }
+
+/* botão "fantasma": vidro discreto que acende em roxo no hover (mês, engrenagem, Filtros, Copiar) */
+div[class*="st-key-fin_mes_nav"] button, div[class*="st-key-fin_config"] button,
+div[class*="st-key-fin_ext_filtros"] button, div[class*="st-key-fin_ext_copiar"] button {
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;
+    transition: background .2s, border-color .2s, color .2s;
+}
+div[class*="st-key-fin_mes_nav"] button:hover, div[class*="st-key-fin_config"] button:hover,
+div[class*="st-key-fin_ext_filtros"] button:hover, div[class*="st-key-fin_ext_filtros"] button[aria-expanded="true"],
+div[class*="st-key-fin_ext_copiar"] button:hover {
+    background: var(--atlas-purple-soft); border-color: rgba(180, 76, 255, 0.45); color: #fff;
+}
+
+/* botões de ícone das linhas (Extrato e Configurações): transparentes até o hover; excluir acende em vermelho */
+div[class*="st-key-fin_ext_acoes_"] button, div[class*="st-key-fin_cfg_acoes_"] button {
+    min-height: 0; padding: 0; border-radius: 8px;
+    background: transparent; border: 1px solid transparent; color: var(--atlas-text-dim);
+    transition: background .2s, border-color .2s, color .2s;
+}
+div[class*="st-key-fin_ext_acoes_"] button:hover:not(:disabled), div[class*="st-key-fin_cfg_acoes_"] button:hover {
+    background: var(--atlas-purple-soft); border-color: rgba(180, 76, 255, 0.45); color: #fff;
+}
+div[class*="st-key-fin_ext_acoes_"] div[class*="st-key-fin_ext_bdel_"] button:hover,
+div[class*="st-key-fin_cfg_acoes_"] div[class*="st-key-fin_cfg_bdel_"] button:hover {
+    background: rgba(255, 77, 77, 0.12); border-color: rgba(255, 77, 77, 0.45); color: #ff7a7a;
+}
+
+/* linhas de vidro dentro dos diálogos (copiar fixos e itens das configurações) */
+div[class*="st-key-fin_cop_lin_"], div[class*="st-key-fin_cfg_lin_"] {
+    flex-wrap: nowrap;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid var(--glass-border); border-radius: 10px;
+    transition: border-color .2s, background .2s;
+}
+div[class*="st-key-fin_cop_lin_"]:hover, div[class*="st-key-fin_cfg_lin_"]:hover {
+    border-color: rgba(180, 76, 255, 0.4); background: rgba(180, 76, 255, 0.05);
+}
+
+/* seletor de mês: ‹ Novembro 2026 › */
+div[class*="st-key-fin_mes_nav"] { flex-wrap: nowrap; }
+div[class*="st-key-fin_mes_nav"] button { min-height: 0; height: 2.3rem; border-radius: 10px; }
+div[class*="st-key-fin_mes_ant"] button, div[class*="st-key-fin_mes_prox"] button { width: 2.3rem; padding: 0; }
+div[class*="st-key-fin_mes_rotulo"] button { min-width: 10.5rem; font-weight: 600; color: #ececf1; }
+div[class*="st-key-fin_config"] button { width: 2.3rem; height: 2.3rem; min-height: 0; padding: 0; border-radius: 10px; }
+div[class*="st-key-fin_topo_acoes"] { flex-wrap: nowrap; }
+
+/* abas: três botões grandes; a ativa em roxo neon (mesma linguagem do menu lateral) */
+div[class*="st-key-fin_abas"] { margin: .4rem 0 1.1rem; }
+div[class*="st-key-fin_abas"] button {
+    height: 3rem; border-radius: 14px; font-size: 1.02rem; font-weight: 500;
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border); color: #c9c9d6;
+    transition: background .2s, border-color .2s, box-shadow .2s, color .2s;
+}
+div[class*="st-key-fin_abas"] button:hover { border-color: rgba(180, 76, 255, 0.45); color: #fff; }
+div[class*="st-key-fin_abas"] button[kind="primary"] {
+    background: linear-gradient(135deg, rgba(193, 91, 255, .32), rgba(122, 47, 209, .28));
+    border-color: rgba(180, 76, 255, 0.75); color: #fff;
+    box-shadow: 0 0 22px rgba(180, 76, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* cartões do módulo: st.container(key="fin_card_<nome>"). Lado a lado (colunas ou grade), ficam com a
+   mesma altura: o invólucro do cartão (stLayoutWrapper) estica e o cartão ocupa tudo */
+div[data-testid="stLayoutWrapper"]:has(> div[class*="st-key-fin_card"]) { flex: 1; }
+div[class*="st-key-fin_card"] { height: 100%; box-sizing: border-box; }
+div[class*="st-key-fin_card"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+div[class*="st-key-fin_card"] {
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border); border-radius: 16px; box-shadow: var(--glass-shadow);
+    padding: 1rem 1.15rem; transition: border-color .25s, box-shadow .25s;
+}
+div[class*="st-key-fin_card"]:hover { border-color: rgba(180, 76, 255, 0.4); }
+div[class*="st-key-fin_card"] [data-testid="stElementToolbar"] { display: none; }
+.fin-card-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+.fin-card-titulo { display: inline-flex; align-items: center; font-size: 1.05rem; font-weight: 600; white-space: nowrap; }
+.fin-card-ico { color: #d39bff; margin-right: .5rem; }
+.fin-card-extra { color: var(--atlas-text-dim); font-size: .85rem; white-space: nowrap; }
+.fin-estado-vazio { color: var(--atlas-text-dim); font-size: .9rem; text-align: center; padding: 1.6rem 0; }
+
+/* peças comuns: categoria, banco, forma e valor */
+.fin-chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: #c9c9d6; white-space: nowrap; }
+.fin-chip i { width: .55rem; height: .55rem; border-radius: 50%; background: var(--cat); box-shadow: 0 0 6px var(--cat); flex-shrink: 0; }
+.fin-banco { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; white-space: nowrap; }
+.fin-banco b {
+    display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem;
+    border-radius: 7px; background: var(--banco); color: #fff; font-size: .68rem; font-weight: 700;
+    box-shadow: 0 0 10px -2px var(--banco);
+}
+.fin-banco.dinheiro .material-icon { margin: 0; font-size: 1.25rem; }
+.fin-forma { display: inline-flex; align-items: center; font-size: .85rem; white-space: nowrap; }
+.fin-forma .material-icon { font-size: 1rem; color: var(--atlas-text-dim); }
+.fin-valor { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-valor.entrada { color: var(--fin-entrada); }
+.fin-valor.saida { color: var(--fin-saida); }
+.fin-banco.dinheiro .material-icon { color: var(--fin-entrada); }
+
+/* descrição do lançamento em uma linha com reticências e a categoria embaixo; sem descrição, a categoria é o texto */
+.fin-desc { display: flex; flex-direction: column; gap: .12rem; line-height: 1.25; min-width: 0; }
+.fin-desc-txt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ececf1; }
+.fin-desc .fin-chip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; }
+.fin-desc .fin-chip i { display: inline-block; vertical-align: middle; margin: -.1rem .4rem 0 0; }
+.fin-desc.sem .fin-chip { font-size: .86rem; color: #ececf1; }
+
+/* selo pequeno em caixa alta ("filtrado", "oculto") */
+.fin-selo {
+    flex: none; padding: .1rem .5rem; border-radius: 999px; font-size: .66rem; letter-spacing: .06em;
+    text-transform: uppercase; background: var(--atlas-purple-soft); color: var(--fin-destaque);
+}
+.fin-vazio { color: var(--atlas-text-dim); }

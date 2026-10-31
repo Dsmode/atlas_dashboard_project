@@ -43,15 +43,33 @@ except Exception as erro:
 if "pagina" not in st.session_state:
     st.session_state.pagina = "Início"
 
+def _item_menu(nome):
+    icone = MODULOS[nome][0]
+    ativo = st.session_state.pagina == nome
+    if st.button(nome, icon=icone, key=f"nav_{nome}", use_container_width=True,
+                 type="primary" if ativo else "secondary"):
+        st.session_state.pagina = nome
+        metas.recolher_cartoes()
+        st.rerun()
+
+
+# dados de exemplo da conta (visual por enquanto; virão do login)
+CONTA = {"iniciais": "VC", "nome": "Vinicius", "email": "vinicius@exemplo.com"}
+
 with st.sidebar:
     st.markdown('<div class="atlas-brand"><span class="dot"></span>ATLAS</div>', unsafe_allow_html=True)
+    _item_menu("Início")
     st.markdown('<div class="atlas-nav-label">FERRAMENTAS</div>', unsafe_allow_html=True)
-    for nome, (icone, _) in MODULOS.items():
-        ativo = st.session_state.pagina == nome
-        if st.button(nome, icon=icone, key=f"nav_{nome}", use_container_width=True,
-                     type="primary" if ativo else "secondary"):
-            st.session_state.pagina = nome
-            metas.recolher_cartoes()
-            st.rerun()
+    for nome in MODULOS:
+        if nome != "Início":
+            _item_menu(nome)
+    with st.container(key="atlas_conta"):
+        st.markdown(
+            f'<div class="conta-avatar">{CONTA["iniciais"]}</div>'
+            f'<div class="conta-info"><div class="conta-nome">{CONTA["nome"]}</div>'
+            f'<div class="conta-email">{CONTA["email"]}</div></div>'
+            '<div class="conta-setas"><span>expand_less</span><span>expand_more</span></div>',
+            unsafe_allow_html=True,
+        )
 
 MODULOS[st.session_state.pagina][1]()

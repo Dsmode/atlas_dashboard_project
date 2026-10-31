@@ -5,6 +5,8 @@ from pathlib import Path
 import mysql.connector
 from dotenv import load_dotenv
 
+from database import financas_padroes
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
@@ -66,6 +68,7 @@ def init_db():
         for comando in comandos:
             cur.execute(comando)
         _migrar(cur)
+        financas_padroes.criar_padroes(cur)
         conn.commit()
     finally:
         conn.close()

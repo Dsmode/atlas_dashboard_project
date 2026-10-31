@@ -1,0 +1,153 @@
+/* ---------- Controle Financeiro: aba Dashboard ---------- */
+
+/* linha fina de resumo: uma faixa de vidro com 4 itens separados por filetes */
+.fin-resumo {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid rgba(190, 120, 255, 0.24); border-radius: 14px;
+    box-shadow: var(--glass-shadow), 0 0 18px -8px rgba(180, 76, 255, 0.5);
+    padding: .6rem .4rem;
+}
+.fin-resumo-item {
+    --tom: #d39bff;
+    display: flex; align-items: center; gap: .7rem; min-width: 0; padding: .1rem .9rem;
+    border-left: 1px solid var(--glass-border);
+    animation: fin-surge .5s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+.fin-resumo-item:first-child { border-left: none; }
+.fin-resumo-item:nth-child(2) { animation-delay: .06s; }
+.fin-resumo-item:nth-child(3) { animation-delay: .12s; }
+.fin-resumo-item:nth-child(4) { animation-delay: .18s; }
+.fin-resumo-item.entrada, .fin-resumo-item.saldo.positivo { --tom: #4dd2a0; }
+.fin-resumo-item.saida, .fin-resumo-item.saldo.negativo, .fin-resumo-item.pct.acima { --tom: #ff6b7a; }
+.fin-resumo-ico {
+    flex: none; margin: 0; width: 30px; height: 30px; border-radius: 9px; font-size: 1.05rem;
+    display: inline-flex; align-items: center; justify-content: center; color: var(--tom);
+    background: color-mix(in srgb, var(--tom) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tom) 32%, transparent);
+    box-shadow: 0 0 12px -4px var(--tom);
+}
+.fin-resumo-texto { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
+.fin-resumo-rotulo { color: var(--atlas-text-dim); font-size: .74rem; white-space: nowrap; }
+.fin-resumo-valor {
+    font-size: 1.12rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums; color: #f1f1f6;
+}
+.fin-resumo-item.entrada .fin-resumo-valor, .fin-resumo-item.saida .fin-resumo-valor,
+.fin-resumo-item.saldo.positivo .fin-resumo-valor, .fin-resumo-item.saldo.negativo .fin-resumo-valor,
+.fin-resumo-item.pct.acima .fin-resumo-valor { color: var(--tom); }
+.fin-resumo-item.entrada .fin-resumo-valor, .fin-resumo-item.saida .fin-resumo-valor,
+.fin-resumo-item.saldo.positivo .fin-resumo-valor, .fin-resumo-item.saldo.negativo .fin-resumo-valor {
+    text-shadow: 0 0 6px color-mix(in srgb, var(--tom) 20%, transparent);
+}
+.fin-resumo-item.sem-renda .fin-resumo-valor { color: var(--atlas-text-dim); }
+/* barrinha do % da renda gasta (passa de 100%: fica vermelha e cheia) */
+.fin-resumo-barra { display: block; height: 4px; margin-top: .3rem; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.fin-resumo-barra i {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--atlas-purple-deep), var(--tom));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--tom) 60%, transparent);
+    animation: fin-enche .9s cubic-bezier(.2, .8, .2, 1) .25s backwards;
+}
+.fin-resumo-barra.vazia i { width: 0; }
+
+/* a faixa de resumo tem a margem do markdown zerada pelo mesmo motivo do base.css */
+.st-key-fin_dash > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+
+/* grade 2 × 2 de cartões; cada cartão vem embrulhado num stLayoutWrapper, que vira a célula da grade */
+div[class*="st-key-fin_dash_grade"] {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fin-gap); align-items: stretch;
+}
+div[class*="st-key-fin_dash_grade"] > [data-testid="stLayoutWrapper"] { display: flex; flex-direction: column; min-width: 0; }
+div[class*="st-key-fin_card_dash"] { gap: .55rem; position: relative; overflow: hidden; isolation: isolate; }
+div[class*="st-key-fin_card_dash"]:hover { box-shadow: var(--glass-shadow), 0 0 22px rgba(180, 76, 255, 0.16); }
+/* brilho neon sutil no canto do cartão */
+div[class*="st-key-fin_card_dash"]::before {
+    content: ""; position: absolute; top: -40%; right: -25%; width: 70%; height: 80%; z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse at 70% 30%, rgba(180, 76, 255, 0.16), transparent 65%);
+}
+.fin-dash-legenda { margin-top: 0; }
+.fin-dash-legenda b { font-variant-numeric: tabular-nums; }
+/* estado vazio com a altura do gráfico: os cartões da mesma linha continuam alinhados */
+div[class*="st-key-fin_dash_vazio"] { flex: 1; min-height: 230px; justify-content: center; }
+
+/* "Para onde vai o dinheiro": título + seletor na mesma linha; rosca e legenda lado a lado */
+div[class*="st-key-fin_dash_rosca_topo"] { flex-wrap: nowrap; gap: .6rem; }
+div[class*="st-key-fin_dash_rosca_topo"] > [data-testid="stElementContainer"]:has(.fin-card-head) { flex: 1 1 auto; min-width: 0; }
+div[class*="st-key-fin_dash_rosca_topo"] [data-testid="stButtonGroup"] button {
+    min-height: 0; height: 1.9rem; padding: 0 .8rem; font-size: .8rem;
+}
+div[class*="st-key-fin_dash_rosca_corpo"] { flex-wrap: wrap; row-gap: .4rem; }
+div[class*="st-key-fin_dash_rosca_corpo"] > [data-testid="stElementContainer"]:has(.fin-rosca-legenda) { flex: 1 1 190px; min-width: 0; }
+.fin-rosca-legenda { display: flex; flex-direction: column; gap: .3rem; max-height: 230px; overflow-y: auto; padding-right: .2rem; }
+.fin-rosca-item {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .4rem;
+    padding: .22rem .35rem; border-radius: 8px; font-size: .82rem; color: #c9c9d6; transition: background .2s;
+}
+.fin-rosca-item:hover { background: rgba(255, 255, 255, 0.04); }
+.fin-rosca-item i { width: .6rem; height: .6rem; border-radius: 50%; background: var(--cat); box-shadow: 0 0 7px var(--cat); }
+.fin-rosca-nome { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-rosca-pct { color: var(--atlas-text-dim); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.fin-rosca-item b { color: #ececf1; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin-rosca-item.zerado { opacity: .45; }
+
+/* movimento sutil nos gráficos (Vega em SVG); só transform/opacity em grupos de marca, nunca no texto posicionado */
+@keyframes fin-surge { from { opacity: 0; transform: translateY(4px); } }
+@keyframes fin-enche { from { width: 0; } }
+@keyframes fin-sobe { from { transform: scaleY(0); opacity: 0; } }
+@keyframes fin-estica { from { transform: scaleX(0); opacity: 0; } }
+@keyframes fin-gira { from { transform: rotate(-80deg) scale(.86); opacity: 0; } }
+@keyframes fin-aparece { from { opacity: 0; } }
+@keyframes fin-revela { from { clip-path: inset(-10px 100% -10px 0); } to { clip-path: inset(-10px 0 -10px 0); } }
+@keyframes fin-pulsa {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(214, 139, 255, 0.4)); }
+    50% { filter: drop-shadow(0 0 8px rgba(214, 139, 255, 0.95)); }
+}
+div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path,
+div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path { transition: filter .2s; }
+/* neon dos gráficos: o mesmo halo roxo nas colunas, nas barras do Top 5 (o trilho fica de fora) e nos pontos do fluxo;
+   a rosca e a linha do fluxo ficam sem brilho.
+   O halo sai do formato da marca e é multiplicado pela opacidade dela: por isso um tom único e firme */
+div[class*="st-key-fin_card_dash"] { --fin-neon: drop-shadow(0 0 3px rgba(190, 110, 255, 0.55)) drop-shadow(0 0 8px rgba(190, 110, 255, 0.5)); }
+div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark path,
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path,
+div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:not(:last-child) { filter: var(--fin-neon); }
+div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path:hover,
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path:hover { filter: brightness(1.25) var(--fin-neon); }
+div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path:hover { filter: brightness(1.25); }
+/* Entradas × Saídas: as colunas sobem a partir da base */
+div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark {
+    transform-box: fill-box; transform-origin: 50% 100%;
+    animation: fin-sobe .75s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+/* rosca: gira e cresce do centro; o total surge depois */
+div[class*="st-key-fin_card_dash_rosca"] .mark-arc.role-mark {
+    transform-box: fill-box; transform-origin: 50% 50%;
+    animation: fin-gira .8s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+div[class*="st-key-fin_card_dash_rosca"] .mark-text.role-mark text { animation: fin-aparece .5s ease-out .45s backwards; }
+/* fluxo de caixa: linha e área se revelam da esquerda (recorte, sem depender do comprimento da linha);
+   os pontos aparecem depois e o do mês ativo respira */
+div[class*="st-key-fin_card_dash_fluxo"] .mark-line.role-mark,
+div[class*="st-key-fin_card_dash_fluxo"] .mark-area.role-mark { animation: fin-revela 1.2s cubic-bezier(.3, .7, .2, 1) backwards; }
+div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark { animation: fin-aparece .4s ease-out .8s backwards; }
+div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:last-child { animation: fin-pulsa 3.4s ease-in-out 1.3s infinite; }
+/* top 5: as barras (não o trilho, que é a primeira camada) esticam da esquerda; os valores surgem depois */
+div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks {
+    transform-box: fill-box; transform-origin: 0% 50%;
+    animation: fin-estica .75s cubic-bezier(.2, .8, .2, 1) backwards;
+}
+div[class*="st-key-fin_card_dash_top"] .mark-text.role-mark text { animation: fin-aparece .5s ease-out .55s backwards; }
+
+/* a sidebar ocupa ~290 px: abaixo de 1200 de janela os cartões ficam estreitos, então vão para 1 coluna */
+@media (max-width: 1199px) {
+    div[class*="st-key-fin_dash_grade"] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+    .fin-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: .7rem; }
+    .fin-resumo-item:nth-child(3) { border-left: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fin-resumo-item, .fin-resumo-barra i,
+    div[class*="st-key-fin_card_dash"] svg, div[class*="st-key-fin_card_dash"] svg * { animation: none !important; }
+}

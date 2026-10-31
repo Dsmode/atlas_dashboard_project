@@ -1,0 +1,32 @@
+/* ---------- Controle Financeiro: aba Importar (prévia, tudo desabilitado) ---------- */
+.fin-imp-aviso {
+    display: flex; align-items: center; gap: .85rem; padding: .8rem 1.1rem;
+    border-radius: 14px; border: 1px solid rgba(255, 209, 102, .35); background: rgba(255, 209, 102, .07);
+}
+.fin-imp-aviso > .material-icon { margin: 0; font-size: 1.6rem; color: #ffd166; }
+.fin-imp-aviso b { display: block; color: #ffd166; font-weight: 600; }
+.fin-imp-aviso span { color: #c9c9d6; font-size: .88rem; }
+
+/* os dois cartões de cima ficam com a mesma altura pela regra comum do base.css */
+div[class*="st-key-fin_card_imp_historico"] { margin-top: 0; }
+
+.fin-imp-soltar {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem;
+    min-height: 170px; margin-bottom: .6rem; border-radius: 14px; text-align: center;
+    border: 2px dashed rgba(210, 170, 255, .28); background: rgba(255, 255, 255, .025);
+    color: var(--atlas-text-dim); cursor: not-allowed; opacity: .75;
+}
+.fin-imp-soltar .material-icon { margin: 0; font-size: 2.6rem; color: #d39bff; }
+.fin-imp-soltar p { margin: 0; color: #c9c9d6; }
+.fin-imp-soltar small { font-size: .75rem; }
+
+.fin-imp-bancos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0 .6rem; }
+.fin-imp-banco {
+    padding: .4rem .65rem; border-radius: 10px; border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, .03); opacity: .8; cursor: not-allowed;
+}
+
+.fin-imp-tabela {
+    display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: .5rem; margin-top: .8rem; padding: .4rem 0;
+    border-bottom: 1px solid var(--glass-border); color: var(--atlas-text-dim); font-size: .8rem; font-weight: 600;
+}

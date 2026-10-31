@@ -4,7 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from database.connection import init_db
-from modules import home, metas
+from modules import financas, home, metas
 
 ASSETS = Path(__file__).parent / "assets"
 _favicon = ASSETS / "favicon.png"
@@ -21,6 +21,7 @@ st.markdown(f"<style>{_css}</style>", unsafe_allow_html=True)
 MODULOS = {
     "Início": (":material/home:", home.render),
     "Metas Pessoais": (":material/flag:", metas.render),
+    "Controle Financeiro": (":material/account_balance_wallet:", financas.render),
 }
 
 

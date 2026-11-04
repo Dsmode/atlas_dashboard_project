@@ -72,4 +72,11 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-MODULOS[st.session_state.pagina][1]()
+# cada módulo tem a sua posição na página e todas são criadas antes de desenhar: os inativos viram st.empty(),
+# o que apaga na hora o que o módulo anterior desenhou (o Streamlit o manteria na tela, esmaecido, até o novo terminar)
+_corpos = {
+    nome: st.container(key=f"modulo_{nome}") if nome == st.session_state.pagina else st.empty()
+    for nome in MODULOS
+}
+with _corpos[st.session_state.pagina]:
+    MODULOS[st.session_state.pagina][1]()

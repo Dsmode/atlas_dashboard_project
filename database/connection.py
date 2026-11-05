@@ -53,6 +53,30 @@ def _migrar(cur):
         )
         if cur.fetchone()[0] == 0:
             cur.execute(f"ALTER TABLE metas ADD COLUMN {coluna} {definicao}")
+    # importação de extratos: ligação do lançamento com a importação e a chave de duplicidade
+    for coluna, definicao in (
+        ("importacao_id", "INT NULL"),
+        ("chave_externa", "VARCHAR(64) NULL"),
+    ):
+        cur.execute(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='fin_lancamentos' AND COLUMN_NAME=%s",
+            (DB_NAME, coluna),
+        )
+        if cur.fetchone()[0] == 0:
+            cur.execute(f"ALTER TABLE fin_lancamentos ADD COLUMN {coluna} {definicao}")
+            if coluna == "importacao_id":
+                cur.execute(
+                    "ALTER TABLE fin_lancamentos ADD CONSTRAINT fk_fin_lancamentos_importacao "
+                    "FOREIGN KEY (importacao_id) REFERENCES fin_importacoes (id) ON DELETE SET NULL"
+                )
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS "
+        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME='fin_lancamentos' AND INDEX_NAME='idx_fin_lancamentos_chave'",
+        (DB_NAME,),
+    )
+    if cur.fetchone()[0] == 0:
+        cur.execute("ALTER TABLE fin_lancamentos ADD INDEX idx_fin_lancamentos_chave (banco_id, chave_externa)")
 
 
 def init_db():

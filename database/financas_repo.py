@@ -1,10 +1,12 @@
 """Consultas do Controle Financeiro (tabelas `fin_*`, sem ligação com as Metas Pessoais)."""
+from collections import Counter
 from decimal import Decimal
 
 from mysql.connector.errors import IntegrityError
 
 from database.connection import get_cursor
 from database.financas_calculos import ZERO, grupo_categoria
+from database.financas_importacao import normalizar
 from database.financas_padroes import COR_OUTROS, NOME_OUTROS
 
 
@@ -77,6 +79,7 @@ def excluir_categoria(categoria_id):
             outros = {"id": cur.lastrowid}
         cur.execute("UPDATE fin_lancamentos SET categoria_id=%s WHERE categoria_id=%s", (outros["id"], categoria_id))
         movidos = cur.rowcount
+        cur.execute("UPDATE fin_regras SET categoria_id=%s WHERE categoria_id=%s", (outros["id"], categoria_id))
         cur.execute("DELETE FROM fin_categorias WHERE id=%s", (categoria_id,))
         return movidos
 
@@ -241,3 +244,181 @@ def totais_por_mes(ate):
         )
         linhas = cur.fetchall()
     return {l["mes"]: (Decimal(l["entradas"]), Decimal(l["saidas"])) for l in linhas}
+
+
+# ---------- "Seu nome" (reconhecer transferências entre as contas do próprio usuário) ----------
+
+NOME_MAX = 80
+
+
+def obter_meu_nome():
+    with get_cursor() as cur:
+        cur.execute("SELECT valor FROM fin_config WHERE chave = 'meu_nome'")
+        linha = cur.fetchone()
+    return linha["valor"] if linha else ""
+
+
+def definir_meu_nome(nome):
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO fin_config (chave, valor) VALUES ('meu_nome', %s) "
+            "ON DUPLICATE KEY UPDATE valor = VALUES(valor)",
+            ((nome or "").strip()[:NOME_MAX],),
+        )
+
+
+# ---------- regras aprendidas na revisão da importação ----------
+
+def listar_regras():
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT r.id, r.padrao, r.categoria_id, c.nome AS categoria_nome, r.tipo, r.ignorar "
+            "FROM fin_regras r LEFT JOIN fin_categorias c ON c.id = r.categoria_id ORDER BY r.padrao"
+        )
+        return cur.fetchall()
+
+
+def salvar_regra(padrao, categoria_id, tipo, ignorar):
+    """Uma regra por padrão (comparado sem caixa nem acento); salvar de novo atualiza."""
+    padrao = normalizar(padrao)[:80]
+    if not padrao:
+        return
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE categoria_id = VALUES(categoria_id), tipo = VALUES(tipo), "
+            "ignorar = VALUES(ignorar)",
+            (padrao, categoria_id, tipo, int(bool(ignorar))),
+        )
+
+
+def lembrar_regra(padrao, categoria_id, tipo):
+    """Regra da revisão da importação: grava só o que veio (None não apaga o que já havia) e não mexe no "ignorar"."""
+    padrao = normalizar(padrao)[:80]
+    if not padrao:
+        return
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, 0) "
+            "ON DUPLICATE KEY UPDATE categoria_id = COALESCE(VALUES(categoria_id), categoria_id), "
+            "tipo = COALESCE(VALUES(tipo), tipo)",
+            (padrao, categoria_id, tipo),
+        )
+
+
+def criar_regra(padrao, categoria_id, tipo, ignorar):
+    """Regra criada à mão: recusa um padrão que já existe (`salvar_regra` da revisão atualiza em silêncio)."""
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, %s)",
+                (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar))),
+            )
+            return cur.lastrowid
+    except IntegrityError as e:
+        raise NomeDuplicado(padrao) from e
+
+
+def atualizar_regra(regra_id, padrao, categoria_id, tipo, ignorar):
+    try:
+        with get_cursor() as cur:
+            cur.execute(
+                "UPDATE fin_regras SET padrao=%s, categoria_id=%s, tipo=%s, ignorar=%s WHERE id=%s",
+                (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar)), regra_id),
+            )
+    except IntegrityError as e:
+        raise NomeDuplicado(padrao) from e
+
+
+def excluir_regra(regra_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM fin_regras WHERE id=%s", (regra_id,))
+
+
+# ---------- importação de extratos ----------
+
+def lancamentos_para_sugestao(limite=5000):
+    """Base da sugestão automática: lançamentos com descrição, os mais recentes primeiro."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT descricao, categoria_id, tipo, data, valor FROM fin_lancamentos "
+            "WHERE descricao IS NOT NULL AND descricao <> '' ORDER BY data DESC, id DESC LIMIT %s",
+            (limite,),
+        )
+        return cur.fetchall()
+
+
+def chaves_existentes(banco_id, chaves):
+    """Quantas vezes cada chave de duplicidade já existe no banco `banco_id` (Counter)."""
+    chaves = list(dict.fromkeys(chaves))
+    existentes = Counter()
+    with get_cursor() as cur:
+        for i in range(0, len(chaves), 500):
+            lote = chaves[i:i + 500]
+            marcas = ", ".join(["%s"] * len(lote))
+            cur.execute(
+                f"SELECT chave_externa, COUNT(*) AS n FROM fin_lancamentos "
+                f"WHERE banco_id <=> %s AND chave_externa IN ({marcas}) GROUP BY chave_externa",
+                (banco_id, *lote),
+            )
+            existentes.update({l["chave_externa"]: l["n"] for l in cur.fetchall()})
+    return existentes
+
+
+def registrar_importacao(meta, lancamentos):
+    """Grava a importação e todos os lançamentos dela de uma vez (tudo ou nada). Devolve o id da importação.
+
+    `meta`: arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, qtd_lidas, qtd_duplicadas,
+    qtd_ignoradas. Cada lançamento leva os campos de `criar_lancamento` mais `chave_externa`.
+    """
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO fin_importacoes (arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, "
+            "qtd_lidas, qtd_importadas, qtd_duplicadas, qtd_ignoradas) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (meta["arquivo"][:255], meta["banco_id"], meta["origem"], (meta.get("observacao") or "").strip()[:255] or None,
+             meta["periodo_inicio"], meta["periodo_fim"], meta["qtd_lidas"], len(lancamentos),
+             meta["qtd_duplicadas"], meta["qtd_ignoradas"]),
+        )
+        importacao_id = cur.lastrowid
+        for dados in lancamentos:
+            _conferir_categoria(cur, dados)
+            cur.execute(
+                f"INSERT INTO fin_lancamentos ({_CAMPOS}, importacao_id, chave_externa) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                _valores(dados) + (importacao_id, dados.get("chave_externa")),
+            )
+    return importacao_id
+
+
+def listar_importacoes(limite=50):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT i.id, i.data_hora, i.arquivo, i.banco_id, i.origem, i.observacao, i.periodo_inicio, "
+            "i.periodo_fim, i.qtd_lidas, i.qtd_importadas, i.qtd_duplicadas, i.qtd_ignoradas, i.status, "
+            "b.nome AS banco_nome, b.sigla AS banco_sigla, b.cor AS banco_cor "
+            "FROM fin_importacoes i LEFT JOIN fin_bancos b ON b.id = i.banco_id "
+            "ORDER BY i.data_hora DESC, i.id DESC LIMIT %s",
+            (limite,),
+        )
+        return cur.fetchall()
+
+
+def contar_lancamentos_importacao(importacao_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS n FROM fin_lancamentos WHERE importacao_id = %s", (importacao_id,))
+        return cur.fetchone()["n"]
+
+
+def desfazer_importacao(importacao_id):
+    """Apaga os lançamentos da importação (mesmo os editados depois) e a marca como desfeita.
+
+    Devolve quantos foram apagados, ou None se a importação não existe ou já foi desfeita."""
+    with get_cursor() as cur:
+        cur.execute("SELECT status FROM fin_importacoes WHERE id = %s FOR UPDATE", (importacao_id,))
+        linha = cur.fetchone()
+        if linha is None or linha["status"] == "desfeita":
+            return None
+        cur.execute("DELETE FROM fin_lancamentos WHERE importacao_id = %s", (importacao_id,))
+        apagados = cur.rowcount
+        cur.execute("UPDATE fin_importacoes SET status = 'desfeita' WHERE id = %s", (importacao_id,))
+        return apagados

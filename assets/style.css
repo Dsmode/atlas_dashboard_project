@@ -22,8 +22,9 @@ html, body, [class*="st-"], .stApp, button, input, textarea {
     font-family: 'Outfit', sans-serif !important;
 }
 
-/* material icons do Streamlit precisam manter a própria fonte */
-span[data-testid="stIconMaterial"] {
+/* material icons do Streamlit precisam manter a própria fonte (inclui os ícones de alerta e de toast) */
+span[data-testid="stIconMaterial"],
+span[data-testid$="DynamicIcon"] {
     font-family: 'Material Symbols Rounded' !important;
 }
 

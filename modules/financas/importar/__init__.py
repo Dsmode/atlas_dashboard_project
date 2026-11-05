@@ -2,6 +2,9 @@
 
 O estado da importação em andamento fica em `st.session_state["fin_imp"]`; sem arquivo no seletor, ele é
 descartado (o estado dos widgets também some quando o módulo não é desenhado). Só OFX por enquanto.
+
+Tela em dois cartões: à esquerda a origem do arquivo (área de soltar que vira o "arquivo verificado" e os chips de
+banco); à direita o intervalo, a observação e o botão Importar, preso na base.
 """
 from datetime import date
 from html import escape
@@ -17,6 +20,7 @@ from modules.financas import comum
 from modules.financas.importar import historico, revisao
 
 ESTADO = revisao.ESTADO
+CHIPS_MAX = 6  # com mais bancos que isso, a grade mostra CHIPS_MAX - 1 chips e o "Outros"
 _ORIGEM = {"conta": "Extrato de conta", "cartao": "Fatura de cartão"}
 _DATA_MIN, _DATA_MAX = date(2000, 1, 1), date(2100, 12, 31)
 
@@ -60,7 +64,8 @@ def _carregar(arquivo, bancos):
         # banco e datas começam pelo que o arquivo diz (os widgets são criados depois, na coluna ao lado)
         detectado = imp.banco_detectado(extrato, bancos)
         datas = [t.data for t in extrato.transacoes]
-        st.session_state["fin_imp_banco"] = detectado["id"] if detectado else None
+        if detectado:  # banco não reconhecido: fica a escolha que o usuário já fez
+            st.session_state["fin_imp_banco"] = detectado["id"]
         st.session_state["fin_imp_inicio"] = min(datas + ([extrato.inicio] if extrato.inicio else []))
         st.session_state["fin_imp_fim"] = max(datas + ([extrato.fim] if extrato.fim else []))
         st.session_state["fin_imp_obs"] = ""
@@ -71,9 +76,9 @@ def _processar(arquivo, bancos):
     """Estado da importação para o arquivo atual do seletor (lê só quando o arquivo muda)."""
     if arquivo is None:
         st.session_state.pop(ESTADO, None)
-        # o navegador reenvia os valores dos widgets: só atribuir (antes de criá-los) limpa de verdade
-        st.session_state.update({"fin_imp_banco": None, "fin_imp_inicio": None, "fin_imp_fim": None,
-                                 "fin_imp_obs": ""})
+        # o navegador reenvia os valores dos widgets: só atribuir (antes de criá-los) limpa de verdade;
+        # o banco escolhido fica, porque os chips valem também antes de anexar o arquivo
+        st.session_state.update({"fin_imp_inicio": None, "fin_imp_fim": None, "fin_imp_obs": ""})
         return None
     estado = st.session_state.get(ESTADO)
     if estado is None or estado["id_arquivo"] != arquivo.file_id:
@@ -81,70 +86,126 @@ def _processar(arquivo, bancos):
     return estado
 
 
-# ---------- cartão do arquivo (esquerda) ----------
+# ---------- área do arquivo (esquerda) ----------
 
 def _trocar_arquivo():
     """O seletor só se esvazia com uma chave nova: o nonce na chave faz o papel do X (que fica escondido)."""
     st.session_state["fin_imp_nonce"] = st.session_state.get("fin_imp_nonce", 0) + 1
 
 
-def _botao_trocar():
-    st.button("Trocar arquivo", icon=":material/swap_horiz:", on_click=_trocar_arquivo, key="fin_imp_trocar")
-
-
-def _cartao_arquivo(estado):
-    comum.cabecalho_cartao("Arquivo selecionado", "description")
+def _zona_arquivo(estado):
+    """Com arquivo, a área tracejada muda de estado: ícone verificado, nome, tamanho e o que o arquivo traz."""
     if estado is None:
-        comum.vazio("Nenhum arquivo selecionado.")
         return
-    if estado["erro"]:
-        st.error(estado["erro"], icon=":material/error:")
-        _botao_trocar()
-        return
-    extrato = estado["extrato"]
-    periodo = f"{_data(extrato.inicio)} a {_data(extrato.fim)}" if extrato.inicio and extrato.fim else "—"
-    linhas = (
-        ("Tipo", _ORIGEM[extrato.origem]),
-        ("Período", periodo),
-        ("Conteúdo", _plural(len(extrato.transacoes), "lançamento", "lançamentos") + " no arquivo"),
-        ("Instituição", escape(extrato.instituicao) or "—"),
-        ("Tamanho", _tamanho(estado["tamanho"])),
-    )
-    grade = "".join(f"<span>{rotulo}</span><b>{valor}</b>" for rotulo, valor in linhas)
-    comum.md(f'<div class="fin-imp-arquivo"><div class="fin-imp-arq-nome">{comum.icone("description")}'
-             f'<span>{escape(estado["nome"])}</span></div><div class="fin-imp-arq-grade">{grade}</div></div>')
-    _botao_trocar()
+    with st.container(key="fin_imp_zona"):
+        if estado["erro"]:
+            st.error(estado["erro"], icon=":material/error:")
+        else:
+            extrato = estado["extrato"]
+            detalhes = [_ORIGEM[extrato.origem]]
+            if extrato.inicio and extrato.fim:
+                detalhes.append(f"{_data(extrato.inicio)} a {_data(extrato.fim)}")
+            detalhes.append(_plural(len(extrato.transacoes), "lançamento", "lançamentos"))
+            nome = estado["nome"]
+            comum.md(
+                f'<div class="fin-imp-zona-ok"><div class="fin-imp-zona-ico">{comum.icone("task")}'
+                f'<i>{comum.icone("check")}</i></div>'
+                f'<div class="fin-imp-zona-nome"><b title="{escape(nome, quote=True)}">{escape(nome)}</b>'
+                f'<span>({_tamanho(estado["tamanho"])})</span></div>'
+                f'<div class="fin-imp-zona-info">{" · ".join(detalhes)}</div></div>'
+            )
+        st.button("Remover arquivo", icon=":material/delete:", on_click=_trocar_arquivo, key="fin_imp_remover")
 
 
-# ---------- opções (direita) ----------
+# ---------- chips de banco ----------
 
-def _bancos_html(bancos, ativo):
+def _escolher_banco(banco_id):
+    st.session_state["fin_imp_banco"] = banco_id
+
+
+def _banco_ativo(bancos):
+    """Banco marcado; se ele foi excluído ou desativado enquanto estava marcado, a escolha some."""
+    atual = st.session_state.get("fin_imp_banco")
+    if atual not in {b["id"] for b in bancos}:
+        atual = st.session_state["fin_imp_banco"] = None
+    return atual
+
+
+def _divisao(bancos, ativo):
+    """(chips da grade, bancos que vão para "Outros"); o banco marcado nunca fica escondido."""
+    if len(bancos) <= CHIPS_MAX:
+        return bancos, []
+    visiveis = bancos[:CHIPS_MAX - 1]
+    if ativo is not None and all(b["id"] != ativo for b in visiveis):
+        visiveis = bancos[:CHIPS_MAX - 2] + [next(b for b in bancos if b["id"] == ativo)]
+    return visiveis, [b for b in bancos if b not in visiveis]
+
+
+def _chip(corpo_html, classe, chave, rotulo, **botao):
+    """O visual é HTML (o mesmo selo dos bancos no resto do módulo); um botão invisível por cima recebe o clique."""
+    with st.container(key=f"fin_imp_bk_{chave}"):
+        comum.md(f'<div class="fin-imp-chip{classe}">{corpo_html}</div>')
+        return st.button(rotulo, key=f"fin_imp_bkb_{chave}", **botao)
+
+
+def _abrir_outros():
+    st.session_state["fin_imp_outros"] = True
+
+
+def _fechar_outros():
+    st.session_state["fin_imp_outros"] = False
+
+
+def _chip_banco(banco, ativo, na_janela=False):
+    selo = comum.selo_banco(banco["sigla"], banco["nome"], banco["cor"])
+    marca = f'<i class="fin-imp-chk">{comum.icone("check")}</i>' if ativo else ""
+    extra = {} if na_janela else {"on_click": _escolher_banco, "args": (banco["id"],)}
+    clicou = _chip(selo + marca, " ativo" if ativo else "", banco["id"], banco["nome"], **extra)
+    if clicou and na_janela:  # dentro da janela: grava e fecha com um rerun da página toda
+        _escolher_banco(banco["id"])
+        _fechar_outros()
+        st.rerun()
+
+
+@st.dialog("Outros bancos", on_dismiss=_fechar_outros)
+def _dialogo_outros(restantes, ativo):
+    with st.container(key="fin_imp_bancos_outros"):
+        for banco in restantes:
+            _chip_banco(banco, banco["id"] == ativo, na_janela=True)
+
+
+def _bancos(estado, bancos):
+    """Grade de chips de seleção única. Devolve o id do banco marcado (ou None)."""
+    comum.cabecalho_cartao("Selecione o banco", "account_balance")
+    ativo = _banco_ativo(bancos)
     if not bancos:
-        return '<div class="fin-vazio">Nenhum banco ativo nas configurações.</div>'
-    selos = "".join(
-        f'<span class="fin-imp-banco{" ativo" if b["id"] == ativo else ""}">'
-        f'{comum.selo_banco(b["sigla"], b["nome"], b["cor"])}</span>'
-        for b in bancos
-    )
-    return f'<div class="fin-imp-bancos">{selos}</div>'
+        comum.vazio("Nenhum banco ativo nas configurações.")
+        return None
+    visiveis, restantes = _divisao(bancos, ativo)
+    with st.container(key="fin_imp_bancos"):
+        for banco in visiveis:
+            _chip_banco(banco, banco["id"] == ativo)
+        if restantes:
+            _chip(f'{comum.icone("more_horiz")}<span>Outros</span>', " outros", "outros", "Outros",
+                  on_click=_abrir_outros)
+    if restantes and st.session_state.get("fin_imp_outros"):
+        _dialogo_outros(restantes, ativo)
+    extrato = estado["extrato"] if estado else None
+    if extrato and ativo is not None:
+        detectado = imp.banco_detectado(extrato, bancos)
+        if detectado and detectado["id"] != ativo:
+            escolhido = next(b["nome"] for b in bancos if b["id"] == ativo)
+            comum.md(f'<div class="fin-imp-nota">{comum.icone("info")}<span>O arquivo parece ser do '
+                     f'<b>{escape(detectado["nome"])}</b>, mas você escolheu <b>{escape(escolhido)}</b>.</span></div>')
+    return ativo
 
 
-def _opcoes(estado, bancos):
-    """Banco, intervalo e observação. Devolve (estado do botão, assinatura da escolha) para a revisão."""
+# ---------- intervalo, observação e botão (direita) ----------
+
+def _opcoes(estado, banco_id):
+    """Intervalo, observação e o botão Importar. Devolve (clicou, assinatura) para a revisão."""
     pronto = bool(estado and estado["extrato"])
     extrato = estado["extrato"] if pronto else None
-    nomes = {b["id"]: b["nome"] for b in bancos}
-
-    comum.cabecalho_cartao("Selecione o banco", "account_balance")
-    comum.md(_bancos_html(bancos, st.session_state.get("fin_imp_banco")))
-    banco_id = st.selectbox("Banco", list(nomes), format_func=nomes.get, index=None,
-                            placeholder="Selecione o banco", disabled=not pronto, label_visibility="collapsed",
-                            key="fin_imp_banco")
-    if pronto and banco_id is not None:
-        detectado = imp.banco_detectado(extrato, bancos)
-        if detectado and detectado["id"] != banco_id:
-            comum.md(f'<div class="fin-imp-nota">{comum.icone("info")}O arquivo parece ser do '
-                     f'<b>{escape(detectado["nome"])}</b>, mas você escolheu <b>{escape(nomes[banco_id])}</b>.</div>')
 
     comum.cabecalho_cartao("Intervalo de datas", "date_range")
     col_inicio, col_fim = st.columns(2)
@@ -156,26 +217,33 @@ def _opcoes(estado, bancos):
     st.text_input("Observação (aparece no histórico)", max_chars=calc.OBSERVACAO_MAX, disabled=not pronto,
                   placeholder="Ex.: Fatura do cartão de crédito", label_visibility="collapsed", key="fin_imp_obs")
 
-    motivo = None
-    if pronto:
-        if banco_id is None:
-            motivo = "Escolha o banco."
-        elif not inicio or not fim:
-            motivo = "Informe as duas datas."
-        elif fim < inicio:
-            motivo = "A data final não pode ser anterior à inicial."
+    avisos, motivo = [], None
+    if estado and estado["erro"]:
+        motivo = "Remova o arquivo com erro e anexe outro."
+    elif not pronto:
+        motivo = "Anexe um arquivo OFX" + (" e escolha o banco." if banco_id is None else " para continuar.")
+    elif banco_id is None:
+        motivo = "Escolha o banco."
+    elif not inicio or not fim:
+        motivo = "Informe as duas datas."
+    elif fim < inicio:
+        motivo = "A data final não pode ser anterior à inicial."
+    else:
+        n = len(imp.recortar(extrato.transacoes, inicio, fim))
+        if n == 0:
+            motivo = "Nenhum lançamento neste intervalo."
         else:
-            n = len(imp.recortar(extrato.transacoes, inicio, fim))
-            if n == 0:
-                motivo = "Nenhum lançamento neste intervalo."
-            else:
-                st.caption(_plural(n, "lançamento", "lançamentos") + " neste intervalo.")
-            if extrato.inicio and extrato.fim and (inicio < extrato.inicio or fim > extrato.fim):
-                st.caption(f"O arquivo cobre de {_data(extrato.inicio)} a {_data(extrato.fim)}.")
-    if motivo:
-        st.caption(motivo)
-    clicou = st.button("Importar dados", icon=":material/upload:", type="primary", disabled=not pronto or bool(motivo),
-                       width="stretch", key="fin_imp_botao")
+            avisos.append(_plural(n, "lançamento", "lançamentos") + " neste intervalo.")
+        if extrato.inicio and extrato.fim and (inicio < extrato.inicio or fim > extrato.fim):
+            avisos.append(f"O arquivo cobre de {_data(extrato.inicio)} a {_data(extrato.fim)}.")
+    # o botão fica preso na base do cartão (CSS) e só libera com arquivo, banco e datas válidos
+    with st.container(key="fin_imp_cta"):
+        for aviso in avisos:
+            st.caption(aviso)
+        if motivo:
+            st.caption(motivo)
+        clicou = st.button("Importar dados", icon=":material/upload:", type="primary", disabled=bool(motivo),
+                           width="stretch", key="fin_imp_botao")
     assinatura = (estado["id_arquivo"], banco_id, inicio, fim) if pronto else None
     return clicou, assinatura
 
@@ -183,8 +251,9 @@ def _opcoes(estado, bancos):
 # ---------- aba ----------
 
 def _concluir():
-    """Depois de gravar: o seletor ganha uma chave nova (volta vazio) e a tela se atualiza."""
+    """Depois de gravar: o seletor ganha uma chave nova (volta vazio), o banco é desmarcado e a tela se atualiza."""
     st.session_state.pop(ESTADO, None)
+    st.session_state["fin_imp_banco"] = None
     st.session_state["fin_imp_nonce"] = st.session_state.get("fin_imp_nonce", 0) + 1
     st.rerun()
 
@@ -199,9 +268,10 @@ def render(mes):
             label_visibility="collapsed",
         )
         estado = _processar(arquivo, bancos)
-        _cartao_arquivo(estado)
+        _zona_arquivo(estado)
+        banco_id = _bancos(estado, bancos)
     with direita, st.container(key="fin_card_imp_opcoes"):
-        clicou, assinatura = _opcoes(estado, bancos)
+        clicou, assinatura = _opcoes(estado, banco_id)
     if estado and estado["revisao"] and estado["revisao"]["assinatura"] != assinatura:
         estado["revisao"] = None  # mudou arquivo, banco ou intervalo: a revisão não vale mais
     if clicou:

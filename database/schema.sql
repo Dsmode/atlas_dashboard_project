@@ -64,6 +64,34 @@ CREATE TABLE IF NOT EXISTS fin_bancos (
     ativo TINYINT(1) NOT NULL DEFAULT 1
 );
 
+-- Importação de extratos (OFX): histórico de cada importação e regras aprendidas na revisão
+
+CREATE TABLE IF NOT EXISTS fin_importacoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    data_hora DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    arquivo VARCHAR(255) NOT NULL,
+    banco_id INT NULL,
+    origem ENUM('conta', 'cartao') NOT NULL,
+    observacao VARCHAR(255) NULL,
+    periodo_inicio DATE NOT NULL,
+    periodo_fim DATE NOT NULL,
+    qtd_lidas INT NOT NULL DEFAULT 0,
+    qtd_importadas INT NOT NULL DEFAULT 0,
+    qtd_duplicadas INT NOT NULL DEFAULT 0,
+    qtd_ignoradas INT NOT NULL DEFAULT 0,
+    status ENUM('concluida', 'desfeita') NOT NULL DEFAULT 'concluida',
+    FOREIGN KEY (banco_id) REFERENCES fin_bancos (id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS fin_regras (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    padrao VARCHAR(80) NOT NULL UNIQUE,
+    categoria_id INT NULL,
+    tipo ENUM('fixo', 'variavel') NULL,
+    ignorar TINYINT(1) NOT NULL DEFAULT 0,
+    FOREIGN KEY (categoria_id) REFERENCES fin_categorias (id)
+);
+
 CREATE TABLE IF NOT EXISTS fin_lancamentos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tipo ENUM('entrada', 'fixo', 'variavel') NOT NULL,
@@ -75,9 +103,13 @@ CREATE TABLE IF NOT EXISTS fin_lancamentos (
     banco_id INT NULL,
     observacao VARCHAR(255) NULL,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    importacao_id INT NULL,
+    chave_externa VARCHAR(64) NULL,
     INDEX idx_fin_lancamentos_data (data),
+    INDEX idx_fin_lancamentos_chave (banco_id, chave_externa),
     FOREIGN KEY (categoria_id) REFERENCES fin_categorias (id),
-    FOREIGN KEY (banco_id) REFERENCES fin_bancos (id) ON DELETE SET NULL
+    FOREIGN KEY (banco_id) REFERENCES fin_bancos (id) ON DELETE SET NULL,
+    FOREIGN KEY (importacao_id) REFERENCES fin_importacoes (id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS fin_config (

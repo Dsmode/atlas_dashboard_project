@@ -1,32 +1,173 @@
-/* ---------- Controle Financeiro: aba Importar (prévia, tudo desabilitado) ---------- */
-.fin-imp-aviso {
-    display: flex; align-items: center; gap: .85rem; padding: .8rem 1.1rem;
-    border-radius: 14px; border: 1px solid rgba(255, 209, 102, .35); background: rgba(255, 209, 102, .07);
-}
-.fin-imp-aviso > .material-icon { margin: 0; font-size: 1.6rem; color: #ffd166; }
-.fin-imp-aviso b { display: block; color: #ffd166; font-weight: 600; }
-.fin-imp-aviso span { color: #c9c9d6; font-size: .88rem; }
-
+/* ---------- Controle Financeiro: aba Importar ---------- */
 /* os dois cartões de cima ficam com a mesma altura pela regra comum do base.css */
 div[class*="st-key-fin_card_imp_historico"] { margin-top: 0; }
 
-.fin-imp-soltar {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem;
-    min-height: 170px; margin-bottom: .6rem; border-radius: 14px; text-align: center;
+/* ---------- coluna esquerda: área de soltar, arquivo verificado e chips de banco ---------- */
+/* A área vazia é o st.file_uploader com texto em português; com arquivo, o chip nativo some e a mesma moldura
+   tracejada (st.container "fin_imp_zona") passa a mostrar o arquivo e o botão Remover arquivo. */
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploader"]:has([data-testid="stFileChip"]) { display: none; }
+/* o contêiner do seletor escondido também sai do fluxo, senão o vão do cartão (1rem) cresce ao anexar */
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stElementContainer"]:has([data-testid="stFileUploader"] [data-testid="stFileChip"]) { display: none; }
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"],
+div[class*="st-key-fin_imp_zona"] {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .55rem;
+    box-sizing: border-box; min-height: 208px; padding: 1.2rem; text-align: center; border-radius: 14px;
     border: 2px dashed rgba(210, 170, 255, .28); background: rgba(255, 255, 255, .025);
-    color: var(--atlas-text-dim); cursor: not-allowed; opacity: .75;
+    transition: border-color .15s, background .15s;
 }
-.fin-imp-soltar .material-icon { margin: 0; font-size: 2.6rem; color: #d39bff; }
-.fin-imp-soltar p { margin: 0; color: #c9c9d6; }
-.fin-imp-soltar small { font-size: .75rem; }
-
-.fin-imp-bancos { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0 .6rem; }
-.fin-imp-banco {
-    padding: .4rem .65rem; border-radius: 10px; border: 1px solid var(--glass-border);
-    background: rgba(255, 255, 255, .03); opacity: .8; cursor: not-allowed;
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(210, 170, 255, .6); background: rgba(180, 76, 255, .06);
+}
+/* a área vazia e a área com arquivo têm a mesma altura (e não encolhem dentro do cartão): nada pula ao anexar */
+div[data-testid="stLayoutWrapper"]:has(> div[class*="st-key-fin_imp_zona"]),
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stElementContainer"]:has([data-testid="stFileUploader"]) { flex-shrink: 0; }
+/* ícone, texto e botão empilhados e no centro */
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"]::before {
+    content: "upload_file"; order: 0; font-family: "Material Symbols Rounded" !important; font-size: 2.4rem; line-height: 1;
+    color: #d39bff; filter: drop-shadow(0 0 10px rgba(180, 76, 255, .55));
+}
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] { order: 1; display: flex; justify-content: center; }
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] > div { display: flex; justify-content: center; }
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] span {
+    font-size: 0 !important; display: flex; flex-direction: column; align-items: center; gap: .25rem; text-align: center;
+}
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] span::before {
+    content: "Arraste seu arquivo aqui ou clique para procurar"; font-size: .95rem; color: #dcdce6;
+}
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] span::after {
+    content: ".OFX · máx. 10 MB"; font-size: .8rem; color: var(--atlas-text-dim);
+}
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"] > span { order: 2; display: flex; justify-content: center; }
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"] button {
+    display: inline-flex; align-items: center; justify-content: center; margin: 0;
+}
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p { font-size: 0; }
+div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p::after {
+    content: "Selecionar arquivo"; font-size: .9rem;
 }
 
-.fin-imp-tabela {
-    display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: .5rem; margin-top: .8rem; padding: .4rem 0;
-    border-bottom: 1px solid var(--glass-border); color: var(--atlas-text-dim); font-size: .8rem; font-weight: 600;
+/* arquivo verificado (dentro da moldura tracejada) */
+div[class*="st-key-fin_imp_zona"] { border-color: rgba(180, 76, 255, .4); background: rgba(180, 76, 255, .05); }
+div[class*="st-key-fin_imp_zona"] [data-testid="stElementContainer"] { width: auto; max-width: 100%; }
+.fin-imp-zona-ok { display: flex; flex-direction: column; align-items: center; gap: .45rem; min-width: 0; }
+.fin-imp-zona-ico { position: relative; display: inline-flex; line-height: 1; margin-bottom: .25rem; }
+.fin-imp-zona-ico .material-icon {
+    margin: 0; font-size: 3rem; color: #d39bff; filter: drop-shadow(0 0 12px rgba(180, 76, 255, .6));
+}
+.fin-imp-zona-ico i {
+    position: absolute; right: -6px; bottom: -4px; display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; font-style: normal; background: #1e6b52; color: var(--fin-entrada, #4dd2a0);
+    border: 1px solid rgba(77, 210, 160, .7); box-shadow: 0 0 8px rgba(77, 210, 160, .45);
+}
+.fin-imp-zona-ico i .material-icon { margin: 0; font-size: 14px; color: inherit; filter: none; }
+.fin-imp-zona-nome { display: flex; align-items: baseline; justify-content: center; gap: .4rem; max-width: 100%; min-width: 0; }
+.fin-imp-zona-nome b { color: #fff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fin-imp-zona-nome span { color: var(--atlas-text-dim); font-size: .85rem; white-space: nowrap; }
+.fin-imp-zona-info { color: var(--atlas-text-dim); font-size: .85rem; }
+div[class*="st-key-fin_imp_remover"] button {
+    min-height: 0; padding: .3rem .8rem; font-size: .85rem; background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--glass-border); color: #c9c9d6;
+}
+div[class*="st-key-fin_imp_remover"] button:hover { border-color: rgba(255, 107, 122, .55); color: #ff8a96; }
+
+/* chips de banco: grade de seleção única. O visual é o HTML; o botão do Streamlit fica por cima, invisível */
+div[class*="st-key-fin_imp_bancos"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .7rem; }
+div[class*="st-key-fin_imp_bancos"] > [data-testid="stLayoutWrapper"] { min-width: 0; }
+div[class*="st-key-fin_imp_bk_"] { position: relative; gap: 0; }
+div[class*="st-key-fin_imp_bk_"] [data-testid="stElementContainer"]:has(button) {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; z-index: 2;
+}
+div[class*="st-key-fin_imp_bk_"] [data-testid="stButton"] { width: 100%; height: 100%; }
+div[class*="st-key-fin_imp_bk_"] button { width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; min-height: 0; }
+.fin-imp-chip {
+    position: relative; display: flex; align-items: center; gap: .55rem; min-height: 56px; box-sizing: border-box;
+    padding: .55rem .85rem; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, .03);
+    color: #d6d6e0; transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.fin-imp-chip.outros { justify-content: center; color: var(--atlas-text-dim); }
+.fin-imp-chip.outros .material-icon { margin: 0; }
+div[class*="st-key-fin_imp_bk_"]:hover .fin-imp-chip { border-color: rgba(210, 170, 255, .45); background: rgba(255, 255, 255, .05); }
+div[class*="st-key-fin_imp_bk_"]:has(button:focus-visible) .fin-imp-chip { outline: 2px solid rgba(211, 155, 255, .8); outline-offset: 2px; }
+.fin-imp-chip.ativo {
+    border-color: rgba(180, 76, 255, .85); background: rgba(180, 76, 255, .14); color: #fff;
+    box-shadow: 0 0 14px rgba(180, 76, 255, .3), inset 0 0 0 1px rgba(180, 76, 255, .25);
+}
+.fin-imp-chk {
+    position: absolute; top: -7px; right: -7px; display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; font-style: normal; background: #b44cff; color: #fff;
+    box-shadow: 0 0 10px rgba(180, 76, 255, .6);
+}
+.fin-imp-chk .material-icon { margin: 0; font-size: 14px; }
+.fin-imp-nota {
+    display: flex; align-items: flex-start; gap: .5rem; margin: .5rem 0 0; padding: .55rem .75rem;
+    border-radius: 10px; border: 1px solid rgba(255, 209, 102, .35); background: rgba(255, 209, 102, .07);
+    color: #e6e6ee; font-size: .85rem; line-height: 1.35;
+}
+.fin-imp-nota .material-icon { margin: .05rem 0 0; font-size: 1.1rem; color: #ffd166; }
+
+/* coluna direita: o botão Importar fica preso na base do cartão e só libera com os requisitos cumpridos */
+div[data-testid="stLayoutWrapper"]:has(> div[class*="st-key-fin_imp_cta"]) { margin-top: auto; }
+div[class*="st-key-fin_imp_cta"] { gap: .55rem; height: auto; }
+div[class*="st-key-fin_imp_cta"] [data-testid="stCaptionContainer"] { text-align: center; }
+div[class*="st-key-fin_imp_botao"] button {
+    min-height: 3rem; font-size: 1rem; font-weight: 600; border: 0; color: #fff;
+    background: linear-gradient(90deg, #a53bff, #5b6dff); box-shadow: 0 0 20px rgba(150, 70, 255, .45);
+    transition: filter .15s, box-shadow .15s, opacity .15s;
+}
+div[class*="st-key-fin_imp_botao"] button:hover:not(:disabled) { filter: brightness(1.12); box-shadow: 0 0 26px rgba(150, 70, 255, .6); }
+div[class*="st-key-fin_imp_botao"] button:disabled {
+    opacity: .38; cursor: not-allowed; box-shadow: none; filter: saturate(.55); color: #e6e6ee;
+}
+
+/* revisão (janela por cima da aba) */
+.fin-rev-resumo {
+    display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap;
+    padding: .75rem 1rem; border-radius: 14px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, .03);
+}
+.fin-rev-total b { display: block; font-size: 1.05rem; color: #fff; font-weight: 600; }
+.fin-rev-total span { color: var(--atlas-text-dim); font-size: .82rem; }
+.fin-rev-pills { display: flex; gap: .4rem; flex-wrap: wrap; }
+.fin-rev-pills i {
+    font-style: normal; padding: .15rem .7rem; border-radius: 999px; font-size: .78rem; font-weight: 500;
+    background: rgba(255, 255, 255, .08); color: #c9c9d6;
+}
+.fin-rev-pills i.alerta { background: rgba(255, 209, 102, .14); color: #ffd166; }
+.fin-rev-pills i.erro { background: rgba(255, 107, 122, .14); color: #ff6b7a; }
+
+/* histórico de importação */
+.fin-hist-linha {
+    display: grid; grid-template-columns: 1.2fr 2fr 1.2fr 1.8fr 1.5fr 1.1fr .9fr; gap: .6rem; align-items: center;
+    padding: .55rem 0; border-bottom: 1px solid var(--glass-border); font-size: .85rem; color: #ececf1;
+}
+.fin-hist-linha > span { min-width: 0; }
+.fin-hist-linha .arq, .fin-hist-linha .obs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fin-hist-linha .qtd b { font-weight: 600; }
+.fin-hist-linha .qtd small { display: block; color: var(--atlas-text-dim); font-size: .72rem; }
+.fin-hist-linha.desfeita { opacity: .6; }
+.fin-hist-cab { margin-top: .8rem; padding: .4rem 0; color: var(--atlas-text-dim); font-size: .8rem; font-weight: 600; }
+.fin-hist-status {
+    display: inline-block; padding: .1rem .6rem; border-radius: 999px; font-size: .75rem; font-style: normal;
+    font-weight: 600;
+}
+.fin-hist-status.ok { background: rgba(77, 210, 160, .15); color: var(--fin-entrada, #4dd2a0); }
+.fin-hist-status.off { background: rgba(255, 255, 255, .08); color: var(--atlas-text-dim); }
+div[class*="st-key-fin_hist_lista"] { max-height: 360px; overflow-y: auto; gap: 0; }  /* sem vão entre as linhas: o texto fica centrado entre as linhas separadoras */
+div[data-testid="stLayoutWrapper"]:has(> div[class*="st-key-fin_hist_lista"]) { margin-top: -1rem; }  /* encosta a lista na linha do cabeçalho (cancela o vão do cartão) */
+div[class*="st-key-fin_hist_lin_"] { border-bottom: 1px solid var(--glass-border); }
+div[class*="st-key-fin_hist_lin_"] .fin-hist-linha { border-bottom: 0; }
+div[class*="st-key-fin_hist_lin_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+.fin-hist-reserva { width: 122px; flex: none; }
+.fin-hist-dica { color: var(--atlas-text-dim); font-size: .85rem; }
+div[class*="st-key-fin_hist_lin_"] { flex-wrap: nowrap; }
+div[class*="st-key-fin_hist_lin_"] [data-testid="stElementContainer"]:has(.fin-hist-linha) { flex: 1 1 0; min-width: 0; }
+div[class*="st-key-fin_hist_lin_"] div[class*="st-key-fin_hist_desf_"] { width: 122px; flex: none; }
+div[class*="st-key-fin_hist_lin_"] div[class*="st-key-fin_hist_desf_"] button { width: 100%; }
+.fin-hist-cab { padding-right: calc(122px + 1rem); }  /* botão Desfazer (122px) + o vão (1rem) da linha */
+
+/* janelas estreitas (a sidebar ocupa ~290 px): os dois cartões se empilham em vez de ficarem apertados */
+@media (max-width: 1150px) {
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-fin_card_imp_arquivos"]) { flex-direction: column; }
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-fin_card_imp_arquivos"]) > [data-testid="stColumn"] {
+        width: 100% !important; flex: 1 1 auto !important;
+    }
 }

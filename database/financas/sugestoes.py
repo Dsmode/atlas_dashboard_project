@@ -1,16 +1,16 @@
-"""Sugestão automática de categoria e tipo (fixo/variável) para as linhas importadas.
+"""Sugestão de categoria e tipo (fixo ou variável) para as linhas importadas.
 
-Ordem de decisão: regras do usuário → histórico do usuário → dicionário de palavras-chave → padrão ("Outros").
-Funções puras: o contexto (regras, histórico, categorias) é montado pela tela a partir do banco.
-"""
+Ordem de decisão: regras do usuário, histórico do usuário, palavras-chave, padrão ("Outros"). As funções
+são puras: a tela monta o contexto (regras, histórico, categorias) a partir do banco."""
+
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Sequence
 
-from database.financas_importacao import normalizar
+from database.texto import normalizar
 
-# nome (normalizado) da categoria padrão -> palavras inteiras já normalizadas
+# Nome normalizado da categoria padrão para as palavras inteiras que a identificam, já normalizadas.
 PALAVRAS_CHAVE = {
     "alimentacao": ("ifood", "99food", "restaurante", "lanchonete", "padaria", "mercado", "supermercado",
                     "casa de sucos", "pizzaria", "burger", "acougue", "hortifruti"),
@@ -30,10 +30,10 @@ OUTROS = "outros"
 
 @dataclass(frozen=True)
 class Contexto:
-    regras: tuple  # linhas de fin_regras: padrao, categoria_id, tipo, ignorar
-    historico: dict  # descrição normalizada -> {"categoria_id", "tipo"} do lançamento mais recente
-    recorrentes: frozenset  # descrições normalizadas recorrentes (ver `recorrentes`)
-    categorias_gasto: dict  # nome normalizado -> id
+    regras: tuple  # linhas de fin_regras
+    historico: dict  # descrição normalizada para {categoria_id, tipo} do lançamento mais recente
+    recorrentes: frozenset  # descrições normalizadas que se repetem (ver `recorrentes`)
+    categorias_gasto: dict
     categorias_entrada: dict
 
 
@@ -50,6 +50,11 @@ def _palavra(norm, categorias):
         if any(p.search(norm) for p in padroes):
             return categorias.get(nome, categorias.get(OUTROS))
     return None
+
+
+def _regra_aplicavel(regras, norm):
+    candidatas = [r for r in regras if r["padrao"] and r["padrao"] in norm]
+    return max(candidatas, key=lambda r: len(r["padrao"])) if candidatas else None
 
 
 def sugerir(descricao: str, entrada: bool, ctx: Contexto) -> Sugestao:
@@ -71,9 +76,8 @@ def sugerir(descricao: str, entrada: bool, ctx: Contexto) -> Sugestao:
         categoria = categorias.get(OUTROS)
 
     ignorar = False
-    regras = [r for r in ctx.regras if r["padrao"] and r["padrao"] in norm]
-    if regras:
-        regra = max(regras, key=lambda r: len(r["padrao"]))
+    regra = _regra_aplicavel(ctx.regras, norm)
+    if regra:
         origem = "regra"
         ignorar = bool(regra.get("ignorar"))
         if regra.get("categoria_id") in validas:
@@ -89,14 +93,14 @@ def sugerir(descricao: str, entrada: bool, ctx: Contexto) -> Sugestao:
 
 
 def recorrentes(lancamentos: Sequence[dict], mes_atual) -> frozenset:
-    """Descrições (normalizadas) de gastos que apareceram em ≥ 2 meses anteriores a `mes_atual` com valor
-    semelhante (diferença de até 10%). `lancamentos`: dicts com descricao, data, valor e, opcionalmente, tipo."""
+    """Descrições (normalizadas) de gastos que apareceram em pelo menos dois meses anteriores a `mes_atual` com
+    valores até 10% distantes entre si."""
     por_descricao = {}
-    for l in lancamentos:
-        if not l.get("descricao") or l.get("tipo") == "entrada" or l["data"] >= mes_atual:
+    for lanc in lancamentos:
+        if not lanc.get("descricao") or lanc.get("tipo") == "entrada" or lanc["data"] >= mes_atual:
             continue
-        por_descricao.setdefault(normalizar(l["descricao"]), {}).setdefault(
-            (l["data"].year, l["data"].month), []).append(Decimal(l["valor"]))
+        por_descricao.setdefault(normalizar(lanc["descricao"]), {}).setdefault(
+            (lanc["data"].year, lanc["data"].month), []).append(Decimal(lanc["valor"]))
     achados = set()
     for desc, meses in por_descricao.items():
         itens = [(m, v) for m, valores in meses.items() for v in valores]

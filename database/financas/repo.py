@@ -1,34 +1,27 @@
-"""Consultas do Controle Financeiro (tabelas `fin_*`, sem ligação com as Metas Pessoais)."""
 from collections import Counter
 from decimal import Decimal
 
-from mysql.connector.errors import IntegrityError
-
-from database.connection import get_cursor
-from database.financas_calculos import ZERO, grupo_categoria
-from database.financas_importacao import normalizar
-from database.financas_padroes import COR_OUTROS, NOME_OUTROS
+from database.connection import duplicidade, get_cursor
+from database.dinheiro import ZERO
+from database.financas.calculos import grupo_categoria
+from database.financas.padroes import COR_OUTROS, NOME_OUTROS
+from database.texto import normalizar
 
 
 class NomeDuplicado(Exception):
-    """Já existe categoria (do mesmo tipo) ou banco com esse nome."""
+    pass
 
 
 class CategoriaProtegida(Exception):
-    """A categoria "Outros" recebe os lançamentos das excluídas e não pode ser apagada."""
+    pass
 
 
 class CategoriaIncompativel(ValueError):
-    """Entrada com categoria de gasto (ou o contrário), ou categoria que não existe mais."""
+    """Categoria de outro grupo (entrada ou gasto) ou que já não existe."""
 
-
-# ---------- categorias ----------
 
 def listar_categorias(tipo=None):
-    """Categorias com `em_uso` (quantos lançamentos usam cada uma); `tipo` 'entrada' ou 'gasto' filtra.
-
-    "Outros" fica sempre por último dentro de cada tipo.
-    """
+    """Categorias com `em_uso` (quantos lançamentos usam cada uma). "Outros" vem por último em cada tipo."""
     filtro, params = ("WHERE c.tipo = %s", (tipo,)) if tipo else ("", ())
     with get_cursor() as cur:
         cur.execute(
@@ -41,24 +34,18 @@ def listar_categorias(tipo=None):
 
 
 def criar_categoria(tipo, nome, cor):
-    try:
-        with get_cursor() as cur:
-            cur.execute("INSERT INTO fin_categorias (tipo, nome, cor) VALUES (%s, %s, %s)", (tipo, nome, cor))
-            return cur.lastrowid
-    except IntegrityError as e:
-        raise NomeDuplicado(nome) from e
+    with duplicidade(NomeDuplicado, nome), get_cursor() as cur:
+        cur.execute("INSERT INTO fin_categorias (tipo, nome, cor) VALUES (%s, %s, %s)", (tipo, nome, cor))
+        return cur.lastrowid
 
 
 def atualizar_categoria(categoria_id, nome, cor):
-    try:
-        with get_cursor() as cur:
-            cur.execute("UPDATE fin_categorias SET nome=%s, cor=%s WHERE id=%s", (nome, cor, categoria_id))
-    except IntegrityError as e:
-        raise NomeDuplicado(nome) from e
+    with duplicidade(NomeDuplicado, nome), get_cursor() as cur:
+        cur.execute("UPDATE fin_categorias SET nome=%s, cor=%s WHERE id=%s", (nome, cor, categoria_id))
 
 
 def excluir_categoria(categoria_id):
-    """Passa os lançamentos para a "Outros" do mesmo tipo e apaga a categoria. Devolve quantos mudaram."""
+    """Move os lançamentos para a "Outros" do mesmo tipo e apaga a categoria. Devolve quantos mudaram."""
     with get_cursor() as cur:
         cur.execute("SELECT tipo, protegida FROM fin_categorias WHERE id=%s", (categoria_id,))
         categoria = cur.fetchone()
@@ -70,7 +57,8 @@ def excluir_categoria(categoria_id):
             "SELECT id FROM fin_categorias WHERE tipo=%s AND protegida=1 ORDER BY id LIMIT 1", (categoria["tipo"],),
         )
         outros = cur.fetchone()
-        if outros is None:  # banco montado à mão sem a "Outros" protegida: cria (ou protege a que houver)
+        # Banco montado à mão, sem a "Outros" protegida: cria uma (ou protege a que já existir).
+        if outros is None:
             cur.execute(
                 "INSERT INTO fin_categorias (tipo, nome, cor, protegida) VALUES (%s, %s, %s, 1) "
                 "ON DUPLICATE KEY UPDATE protegida = 1, id = LAST_INSERT_ID(id)",
@@ -84,10 +72,7 @@ def excluir_categoria(categoria_id):
         return movidos
 
 
-# ---------- bancos ----------
-
 def listar_bancos(incluir_ocultos=False):
-    """Bancos com `em_uso`; por padrão só os ativos (os que aparecem no formulário)."""
     filtro = "" if incluir_ocultos else "WHERE b.ativo = 1"
     with get_cursor() as cur:
         cur.execute(
@@ -98,22 +83,16 @@ def listar_bancos(incluir_ocultos=False):
 
 
 def criar_banco(nome, sigla, cor):
-    try:
-        with get_cursor() as cur:
-            cur.execute("INSERT INTO fin_bancos (nome, sigla, cor) VALUES (%s, %s, %s)", (nome, sigla, cor))
-            return cur.lastrowid
-    except IntegrityError as e:
-        raise NomeDuplicado(nome) from e
+    with duplicidade(NomeDuplicado, nome), get_cursor() as cur:
+        cur.execute("INSERT INTO fin_bancos (nome, sigla, cor) VALUES (%s, %s, %s)", (nome, sigla, cor))
+        return cur.lastrowid
 
 
 def atualizar_banco(banco_id, nome, sigla, cor):
-    try:
-        with get_cursor() as cur:
-            cur.execute(
-                "UPDATE fin_bancos SET nome=%s, sigla=%s, cor=%s WHERE id=%s", (nome, sigla, cor, banco_id),
-            )
-    except IntegrityError as e:
-        raise NomeDuplicado(nome) from e
+    with duplicidade(NomeDuplicado, nome), get_cursor() as cur:
+        cur.execute(
+            "UPDATE fin_bancos SET nome=%s, sigla=%s, cor=%s WHERE id=%s", (nome, sigla, cor, banco_id),
+        )
 
 
 def definir_banco_ativo(banco_id, ativo):
@@ -123,15 +102,13 @@ def definir_banco_ativo(banco_id, ativo):
 
 
 def excluir_banco(banco_id):
-    """Apaga o banco; os lançamentos dele ficam sem banco (FK `ON DELETE SET NULL`). Devolve quantos."""
+    """Os lançamentos do banco ficam sem banco (FK ON DELETE SET NULL). Devolve quantos eram."""
     with get_cursor() as cur:
         cur.execute("SELECT COUNT(*) AS n FROM fin_lancamentos WHERE banco_id=%s", (banco_id,))
         afetados = cur.fetchone()["n"]
         cur.execute("DELETE FROM fin_bancos WHERE id=%s", (banco_id,))
         return afetados
 
-
-# ---------- configuração ----------
 
 def obter_saldo_inicial():
     with get_cursor() as cur:
@@ -149,8 +126,6 @@ def definir_saldo_inicial(valor):
         )
 
 
-# ---------- lançamentos ----------
-
 _SELECT_LANCAMENTOS = (
     "SELECT l.id, l.tipo, l.data, l.descricao, l.categoria_id, l.valor, l.forma, l.banco_id, l.observacao, "
     "c.nome AS categoria_nome, c.cor AS categoria_cor, "
@@ -161,7 +136,6 @@ _SELECT_LANCAMENTOS = (
 
 
 def listar_lancamentos(inicio, fim, tipo=None):
-    """Lançamentos com data entre `inicio` e `fim` (inclusive), mais recentes primeiro."""
     filtro, params = ("AND l.tipo = %s", (inicio, fim, tipo)) if tipo else ("", (inicio, fim))
     with get_cursor() as cur:
         cur.execute(
@@ -172,7 +146,7 @@ def listar_lancamentos(inicio, fim, tipo=None):
 
 
 def _conferir_categoria(cur, dados):
-    """A tela já filtra as categorias pelo tipo; aqui é a última barreira antes de gravar."""
+    """A tela já filtra as categorias pelo tipo; esta é a última barreira antes de gravar."""
     cur.execute("SELECT tipo FROM fin_categorias WHERE id = %s", (dados["categoria_id"],))
     categoria = cur.fetchone()
     if categoria is None or categoria["tipo"] != grupo_categoria(dados["tipo"]):
@@ -190,27 +164,26 @@ def _valores(dados):
 _CAMPOS = "tipo, data, descricao, categoria_id, valor, forma, banco_id, observacao"
 
 
+_INSERIR = f"INSERT INTO fin_lancamentos ({_CAMPOS}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+
+
 def criar_lancamento(dados):
-    """`dados`: tipo, data, descricao, categoria_id, valor (Decimal > 0), forma, banco_id, observacao."""
     with get_cursor() as cur:
         _conferir_categoria(cur, dados)
-        cur.execute(f"INSERT INTO fin_lancamentos ({_CAMPOS}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                    _valores(dados))
+        cur.execute(_INSERIR, _valores(dados))
         return cur.lastrowid
 
 
 def criar_lancamentos(lista):
-    """Grava vários de uma vez (cópia dos fixos): tudo ou nada."""
     with get_cursor() as cur:
         for dados in lista:
             _conferir_categoria(cur, dados)
-            cur.execute(f"INSERT INTO fin_lancamentos ({_CAMPOS}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                        _valores(dados))
+            cur.execute(_INSERIR, _valores(dados))
     return len(lista)
 
 
 def atualizar_lancamento(lancamento_id, dados):
-    """Devolve False se o lançamento não existe mais (excluído em outra aba, por exemplo)."""
+    """False se o lançamento já não existe (excluído em outra aba, por exemplo)."""
     with get_cursor() as cur:
         _conferir_categoria(cur, dados)
         cur.execute("SELECT 1 FROM fin_lancamentos WHERE id = %s", (lancamento_id,))
@@ -230,10 +203,8 @@ def excluir_lancamento(lancamento_id):
 
 
 def totais_por_mes(ate):
-    """{primeiro dia do mês: (entradas, saídas)} de todos os meses com lançamento até a data `ate`.
-
-    Inclui os meses antigos porque o fluxo de caixa acumula desde o começo.
-    """
+    """{primeiro dia do mês: (entradas, saídas)} de todos os meses até `ate`, e não só da janela mostrada: o
+    fluxo de caixa acumula desde o começo."""
     with get_cursor() as cur:
         cur.execute(
             "SELECT l.data - INTERVAL (DAYOFMONTH(l.data) - 1) DAY AS mes, "
@@ -243,10 +214,8 @@ def totais_por_mes(ate):
             (ate,),
         )
         linhas = cur.fetchall()
-    return {l["mes"]: (Decimal(l["entradas"]), Decimal(l["saidas"])) for l in linhas}
+    return {registro["mes"]: (Decimal(registro["entradas"]), Decimal(registro["saidas"])) for registro in linhas}
 
-
-# ---------- "Seu nome" (reconhecer transferências entre as contas do próprio usuário) ----------
 
 NOME_MAX = 80
 
@@ -267,8 +236,6 @@ def definir_meu_nome(nome):
         )
 
 
-# ---------- regras aprendidas na revisão da importação ----------
-
 def listar_regras():
     with get_cursor() as cur:
         cur.execute(
@@ -278,22 +245,9 @@ def listar_regras():
         return cur.fetchall()
 
 
-def salvar_regra(padrao, categoria_id, tipo, ignorar):
-    """Uma regra por padrão (comparado sem caixa nem acento); salvar de novo atualiza."""
-    padrao = normalizar(padrao)[:80]
-    if not padrao:
-        return
-    with get_cursor() as cur:
-        cur.execute(
-            "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, %s) "
-            "ON DUPLICATE KEY UPDATE categoria_id = VALUES(categoria_id), tipo = VALUES(tipo), "
-            "ignorar = VALUES(ignorar)",
-            (padrao, categoria_id, tipo, int(bool(ignorar))),
-        )
-
-
 def lembrar_regra(padrao, categoria_id, tipo):
-    """Regra da revisão da importação: grava só o que veio (None não apaga o que já havia) e não mexe no "ignorar"."""
+    """Regra gravada pela revisão da importação: só o que veio (None não apaga o que já existia) e sem tocar em
+    "ignorar"."""
     padrao = normalizar(padrao)[:80]
     if not padrao:
         return
@@ -307,27 +261,21 @@ def lembrar_regra(padrao, categoria_id, tipo):
 
 
 def criar_regra(padrao, categoria_id, tipo, ignorar):
-    """Regra criada à mão: recusa um padrão que já existe (`salvar_regra` da revisão atualiza em silêncio)."""
-    try:
-        with get_cursor() as cur:
-            cur.execute(
-                "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, %s)",
-                (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar))),
-            )
-            return cur.lastrowid
-    except IntegrityError as e:
-        raise NomeDuplicado(padrao) from e
+    """Regra criada à mão: um padrão repetido é recusado."""
+    with duplicidade(NomeDuplicado, padrao), get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO fin_regras (padrao, categoria_id, tipo, ignorar) VALUES (%s, %s, %s, %s)",
+            (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar))),
+        )
+        return cur.lastrowid
 
 
 def atualizar_regra(regra_id, padrao, categoria_id, tipo, ignorar):
-    try:
-        with get_cursor() as cur:
-            cur.execute(
-                "UPDATE fin_regras SET padrao=%s, categoria_id=%s, tipo=%s, ignorar=%s WHERE id=%s",
-                (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar)), regra_id),
-            )
-    except IntegrityError as e:
-        raise NomeDuplicado(padrao) from e
+    with duplicidade(NomeDuplicado, padrao), get_cursor() as cur:
+        cur.execute(
+            "UPDATE fin_regras SET padrao=%s, categoria_id=%s, tipo=%s, ignorar=%s WHERE id=%s",
+            (normalizar(padrao)[:80], categoria_id, tipo, int(bool(ignorar)), regra_id),
+        )
 
 
 def excluir_regra(regra_id):
@@ -335,10 +283,7 @@ def excluir_regra(regra_id):
         cur.execute("DELETE FROM fin_regras WHERE id=%s", (regra_id,))
 
 
-# ---------- importação de extratos ----------
-
 def lancamentos_para_sugestao(limite=5000):
-    """Base da sugestão automática: lançamentos com descrição, os mais recentes primeiro."""
     with get_cursor() as cur:
         cur.execute(
             "SELECT descricao, categoria_id, tipo, data, valor FROM fin_lancamentos "
@@ -349,7 +294,6 @@ def lancamentos_para_sugestao(limite=5000):
 
 
 def chaves_existentes(banco_id, chaves):
-    """Quantas vezes cada chave de duplicidade já existe no banco `banco_id` (Counter)."""
     chaves = list(dict.fromkeys(chaves))
     existentes = Counter()
     with get_cursor() as cur:
@@ -361,16 +305,15 @@ def chaves_existentes(banco_id, chaves):
                 f"WHERE banco_id <=> %s AND chave_externa IN ({marcas}) GROUP BY chave_externa",
                 (banco_id, *lote),
             )
-            existentes.update({l["chave_externa"]: l["n"] for l in cur.fetchall()})
+            existentes.update({registro["chave_externa"]: registro["n"] for registro in cur.fetchall()})
     return existentes
 
 
 def registrar_importacao(meta, lancamentos):
-    """Grava a importação e todos os lançamentos dela de uma vez (tudo ou nada). Devolve o id da importação.
+    """Grava a importação e todos os lançamentos dela numa transação e devolve o id da importação.
 
-    `meta`: arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, qtd_lidas, qtd_duplicadas,
-    qtd_ignoradas. Cada lançamento leva os campos de `criar_lancamento` mais `chave_externa`.
-    """
+    `meta` leva arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, qtd_lidas,
+    qtd_duplicadas e qtd_ignoradas. Cada lançamento tem os campos de `criar_lancamento` mais `chave_externa`."""
     with get_cursor() as cur:
         cur.execute(
             "INSERT INTO fin_importacoes (arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, "
@@ -410,9 +353,8 @@ def contar_lancamentos_importacao(importacao_id):
 
 
 def desfazer_importacao(importacao_id):
-    """Apaga os lançamentos da importação (mesmo os editados depois) e a marca como desfeita.
-
-    Devolve quantos foram apagados, ou None se a importação não existe ou já foi desfeita."""
+    """Apaga os lançamentos da importação (inclusive os editados depois) e a marca como desfeita. Devolve
+    quantos foram apagados, ou None se ela não existe ou já foi desfeita."""
     with get_cursor() as cur:
         cur.execute("SELECT status FROM fin_importacoes WHERE id = %s FOR UPDATE", (importacao_id,))
         linha = cur.fetchone()

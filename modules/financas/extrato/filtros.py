@@ -1,12 +1,11 @@
-"""Filtros do Extrato: um botão para as três listas (categorias, bancos e formas), sem busca."""
 import streamlit as st
 
-from database import financas_calculos as calc
+from database.financas import calculos as calc
 from modules.financas import comum
 
 
 def estado(categorias, bancos):
-    """Seleção guardada em session_state (sobrevive à troca de módulo); itens apagados saem do filtro."""
+    """Seleção guardada em session_state, que sobrevive à troca de módulo. Item apagado sai do filtro."""
     filtros = st.session_state.setdefault("fin_filtros", {"categorias": set(), "bancos": set(), "formas": set()})
     filtros["categorias"].intersection_update(c["id"] for c in categorias)
     filtros["bancos"].intersection_update(b["id"] for b in bancos)
@@ -14,8 +13,8 @@ def estado(categorias, bancos):
 
 
 def _pilulas(rotulo, conjunto, opcoes, formatar, chave):
-    """Pílulas de seleção múltipla ligadas a um conjunto. O estado do widget vem sempre do conjunto; o
-    callback só o atualiza (duas pílulas podem dividir o mesmo conjunto, como as categorias)."""
+    """Pílulas de seleção múltipla ligadas a um conjunto. O estado do widget vem sempre do conjunto e o callback só
+    o atualiza, porque duas pílulas podem dividir o mesmo conjunto (as categorias de gasto e de entrada)."""
     if not opcoes:
         return
 
@@ -28,7 +27,6 @@ def _pilulas(rotulo, conjunto, opcoes, formatar, chave):
 
 
 def barra(filtros, categorias, bancos):
-    """Botão "Filtros" (popover) à direita, acima da grade. Devolve quantos filtros estão ativos."""
     ativos = sum(len(v) for v in filtros.values())
     cat_por_id = {c["id"]: c for c in categorias}
     banco_por_id = {b["id"]: b for b in bancos}
@@ -56,11 +54,11 @@ def barra(filtros, categorias, bancos):
 
 
 def aplicar(lancamentos, filtros):
-    """Cada grupo com seleção restringe; sem seleção, vale tudo. Filtro de banco esconde o dinheiro."""
+    """Grupo com seleção restringe; sem seleção, vale tudo. Filtrar por banco esconde o dinheiro."""
     cats, bancos, formas = filtros["categorias"], filtros["bancos"], filtros["formas"]
     return [
-        l for l in lancamentos
-        if (not cats or l["categoria_id"] in cats)
-        and (not bancos or l["banco_id"] in bancos)
-        and (not formas or l["forma"] in formas)
+        lanc for lanc in lancamentos
+        if (not cats or lanc["categoria_id"] in cats)
+        and (not bancos or lanc["banco_id"] in bancos)
+        and (not formas or lanc["forma"] in formas)
     ]

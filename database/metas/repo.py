@@ -1,12 +1,11 @@
 from datetime import date, timedelta
 
-from mysql.connector.errors import IntegrityError
-
-from database.connection import get_cursor
+from database.connection import duplicidade, get_cursor
+from database.datas import inicio_semana
 
 
 def listar_metas():
-    """Todas as metas; cada uma traz `categorias` (lista de dicts id/nome/cor, em ordem alfabética)."""
+    """Todas as metas, cada uma com `categorias` (id, nome e cor, em ordem alfabética)."""
     with get_cursor() as cur:
         cur.execute("SELECT * FROM metas")
         metas = cur.fetchall()
@@ -16,21 +15,18 @@ def listar_metas():
         )
         ligacoes = cur.fetchall()
     por_meta = {}
-    for l in ligacoes:
-        por_meta.setdefault(l["meta_id"], []).append({"id": l["id"], "nome": l["nome"], "cor": l["cor"]})
+    for ligacao in ligacoes:
+        por_meta.setdefault(ligacao["meta_id"], []).append({"id": ligacao["id"], "nome": ligacao["nome"], "cor": ligacao["cor"]})
     for m in metas:
         m["categorias"] = por_meta.get(m["id"], [])
     return metas
 
-
-# ---------- categorias (exclusivas das metas pessoais) ----------
 
 class CategoriaDuplicada(Exception):
     pass
 
 
 def listar_categorias():
-    """Categorias com `em_uso`: quantas metas usam cada uma."""
     with get_cursor() as cur:
         cur.execute(
             "SELECT c.id, c.nome, c.cor, COUNT(mc.meta_id) AS em_uso FROM categorias_meta c "
@@ -40,31 +36,25 @@ def listar_categorias():
 
 
 def criar_categoria(nome, cor):
-    """Devolve o id da nova categoria; levanta CategoriaDuplicada se o nome já existir."""
-    try:
-        with get_cursor() as cur:
-            cur.execute("INSERT INTO categorias_meta (nome, cor) VALUES (%s, %s)", (nome, cor))
-            return cur.lastrowid
-    except IntegrityError as e:
-        raise CategoriaDuplicada(nome) from e
+    """Devolve o id da nova categoria. Levanta CategoriaDuplicada se o nome já existir."""
+    with duplicidade(CategoriaDuplicada, nome), get_cursor() as cur:
+        cur.execute("INSERT INTO categorias_meta (nome, cor) VALUES (%s, %s)", (nome, cor))
+        return cur.lastrowid
 
 
 def atualizar_categoria(categoria_id, nome, cor):
-    try:
-        with get_cursor() as cur:
-            cur.execute("UPDATE categorias_meta SET nome=%s, cor=%s WHERE id=%s", (nome, cor, categoria_id))
-    except IntegrityError as e:
-        raise CategoriaDuplicada(nome) from e
+    with duplicidade(CategoriaDuplicada, nome), get_cursor() as cur:
+        cur.execute("UPDATE categorias_meta SET nome=%s, cor=%s WHERE id=%s", (nome, cor, categoria_id))
 
 
 def excluir_categoria(categoria_id):
-    """Remove a categoria e, em cascata, a ligação dela com as metas (as metas permanecem)."""
+    """Remove a categoria e, em cascata, a ligação dela com as metas; as metas ficam."""
     with get_cursor() as cur:
         cur.execute("DELETE FROM categorias_meta WHERE id=%s", (categoria_id,))
 
 
 def contar_metas_no_periodo(inicio, fim):
-    """Retorna (concluidas, total) das metas com prazo entre `inicio` e `fim`; arquivadas ficam fora."""
+    """(concluidas, total) das metas com prazo entre `inicio` e `fim`, sem as arquivadas."""
     with get_cursor() as cur:
         cur.execute(
             "SELECT COUNT(*) AS total, COALESCE(SUM(status = 'concluida'), 0) AS concluidas "
@@ -76,17 +66,16 @@ def contar_metas_no_periodo(inicio, fim):
 
 
 def contar_metas_por_periodo(por, quantidade=12, hoje=None):
-    """Metas por semana (domingo a sábado, `por="semana"`) ou mês (`por="mes"`) do prazo.
+    """Metas por semana (domingo a sábado) ou por mês do prazo, sem arquivadas nem metas sem prazo.
 
-    Arquivadas e metas sem prazo ficam fora. Devolve os últimos `quantidade` períodos, do mais antigo
-    ao atual, com zero nos vazios: dicts `inicio` (date), `concluidas`, `pendentes` (ativas ainda no
-    prazo) e `atrasadas` (ativas com o prazo vencido, a mesma regra da tela de Metas).
-    """
+    Devolve os últimos `quantidade` períodos, do mais antigo ao atual, com zeros nos vazios: `inicio`,
+    `concluidas`, `pendentes` (ativas ainda no prazo) e `atrasadas` (ativas com prazo vencido, a mesma
+    regra da tela de Metas)."""
     hoje = hoje or date.today()
     if por == "semana":
-        atual = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
+        atual = inicio_semana(hoje)
         inicios = [atual - timedelta(weeks=i) for i in range(quantidade - 1, -1, -1)]
-        # DAYOFWEEK: domingo = 1
+        # No MySQL, DAYOFWEEK vale 1 no domingo.
         chave = "prazo - INTERVAL (DAYOFWEEK(prazo) - 1) DAY"
     elif por == "mes":
         indice = hoje.year * 12 + hoje.month - 1
@@ -103,7 +92,7 @@ def contar_metas_por_periodo(por, quantidade=12, hoje=None):
             "FROM metas WHERE status IN ('ativa', 'concluida') AND prazo >= %s GROUP BY inicio",
             (hoje, hoje, inicios[0]),
         )
-        por_inicio = {l["inicio"]: l for l in cur.fetchall()}
+        por_inicio = {ligacao["inicio"]: ligacao for ligacao in cur.fetchall()}
     vazio = {"concluidas": 0, "pendentes": 0, "atrasadas": 0}
     return [
         {"inicio": i, **{k: int(por_inicio.get(i, vazio)[k]) for k in vazio}}
@@ -112,15 +101,12 @@ def contar_metas_por_periodo(por, quantidade=12, hoje=None):
 
 
 def salvar_meta(meta_id, titulo, descricao, prioridade, prazo, tarefas, categoria_ids=(), progresso=None):
-    """Cria (meta_id=None) ou atualiza a meta e sincroniza o checklist numa só transação.
+    """Cria (meta_id None) ou atualiza a meta e sincroniza o checklist numa transação.
 
-    `tarefas` é a lista final, já na ordem desejada: dicts com `id` (None se nova),
-    `descricao` e `prazo`. Tarefas do banco que não estão na lista são removidas.
-    `categoria_ids` é a seleção final de categorias da meta.
-    `progresso` é None (meta de tarefas) ou um dict com `tipo` (quantidade/valor), `objetivo`, `unidade`,
-    `inicial`, `alvo` e `atual`. Em metas de quantidade/valor as tarefas são ignoradas e as existentes
-    apagadas; em metas de tarefas as colunas de progresso voltam ao padrão.
-    """
+    `tarefas` é a lista final, na ordem desejada: dicts com `id` (None se for nova), `descricao` e `prazo`.
+    As tarefas do banco que não estão na lista são removidas. `progresso` é None (meta de tarefas) ou um
+    dict com tipo, objetivo, unidade, inicial, alvo e atual; nesse caso as tarefas são ignoradas e as
+    existentes apagadas. Numa meta de tarefas, as colunas de progresso voltam ao padrão."""
     p = progresso or {"tipo": "tarefas", "objetivo": "aumentar", "unidade": None, "inicial": None,
                       "alvo": None, "atual": None}
     if p["tipo"] != "tarefas":
@@ -173,8 +159,8 @@ def _valor_atual(cur, meta_id):
 
 
 def somar_valor(meta_id, delta, minimo=None):
-    """Soma `delta` ao valor atual (atômico no SQL; `minimo` é o piso, ex.: 0 em quantidade).
-    Devolve o novo valor."""
+    """Soma `delta` ao valor atual direto no SQL, de forma atômica. `minimo` é o piso (0 em quantidade). Devolve o
+    novo valor."""
     with get_cursor() as cur:
         if minimo is None:
             cur.execute("UPDATE metas SET valor_atual = COALESCE(valor_atual, 0) + %s WHERE id=%s", (delta, meta_id))
@@ -187,7 +173,6 @@ def somar_valor(meta_id, delta, minimo=None):
 
 
 def definir_valor_atual(meta_id, valor, minimo=None):
-    """Grava o valor atual (digitado pelo usuário); `minimo` é o piso. Devolve o valor gravado."""
     if minimo is not None:
         valor = max(valor, minimo)
     with get_cursor() as cur:
@@ -196,7 +181,7 @@ def definir_valor_atual(meta_id, valor, minimo=None):
 
 
 def definir_status(meta_id, status):
-    """Concluir grava a data (mantendo a original, se já houver); arquivar a preserva; reativar a zera."""
+    """Concluir grava a data (mantém a original, se houver); arquivar a preserva; reativar a zera."""
     with get_cursor() as cur:
         cur.execute(
             "UPDATE metas SET status=%s, data_conclusao = CASE %s "

@@ -1,11 +1,11 @@
-"""Controle Financeiro: cabeçalho com o mês ativo, engrenagem e as abas Dashboard, Extrato e Importar."""
 from datetime import date
 from pathlib import Path
 
 import streamlit as st
 
-from database import financas_calculos as calc
+from database.financas import calculos as calc
 from modules.financas import configuracoes, dashboard, extrato, importar
+from modules.ui import corpo_ativo
 
 CSS_DIR = Path(__file__).resolve().parents[2] / "assets" / "financas"
 
@@ -19,20 +19,18 @@ ABAS = {
 
 @st.cache_resource(max_entries=1)
 def _ler_css(versao):
-    """Lê os arquivos uma vez por `versao` (as datas de modificação): editar um .css já vale no próximo rerun."""
+    """Relê os .css só quando a data de modificação muda: editar um arquivo vale no próximo rerun."""
     return "\n".join(p.read_text(encoding="utf-8") for p in sorted(CSS_DIR.glob("*.css")))
 
 
 def _css():
-    """Estilos do módulo (base + um arquivo por aba em assets/financas), injetados só quando ele está aberto.
-
-    Vai por st.markdown: um st.html só com <style> não chegou ao DOM no navegador."""
+    """Injeta o CSS do módulo (base mais um arquivo por aba) só enquanto ele está aberto. Vai por st.markdown
+    porque um st.html só com <style> não chegou ao DOM."""
     versao = tuple((p.name, p.stat().st_mtime_ns) for p in sorted(CSS_DIR.glob("*.css")))
     st.markdown(f"<style>{_ler_css(versao)}</style>", unsafe_allow_html=True)
 
 
-# ---------- mês ativo (aba e mês ficam em session_state: sobrevivem à troca de módulo) ----------
-
+# Mês e aba ficam em session_state para sobreviver à troca de módulo.
 def mes_ativo():
     return st.session_state.setdefault("fin_mes", calc.inicio_mes(date.today()))
 
@@ -86,8 +84,5 @@ def render():
             if st.button("", icon=":material/settings:", key="fin_config", help="Configurações de finanças"):
                 configuracoes.abrir()
         aba = _abas()
-        # cada aba tem a sua posição na página e todas são criadas antes de desenhar: as inativas viram st.empty(),
-        # o que apaga na hora o que a aba anterior desenhou (o Streamlit a manteria na tela até a nova terminar)
-        corpos = {chave: st.container(key=f"fin_corpo_{chave}") if chave == aba else st.empty() for chave in ABAS}
-        with corpos[aba]:
+        with corpo_ativo(ABAS, aba, "fin_corpo_"):
             ABAS[aba][2](mes_ativo())

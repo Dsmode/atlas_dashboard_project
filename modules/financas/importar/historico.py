@@ -1,22 +1,19 @@
 """Histórico de importação (mais recentes primeiro) e o diálogo de desfazer.
 
-Os diálogos do Streamlit reexecutam só a própria função: o estado vai em `st.session_state["fin_hist_desf"]`,
-montado em `abrir_desfazer` antes de abrir.
-"""
+O diálogo do Streamlit reexecuta só a própria função, então o estado vai em session_state["fin_hist_desf"],
+montado em `abrir_desfazer` antes de abrir."""
+
 from html import escape
 
 import streamlit as st
 
-from database import financas_repo as repo
+from database.financas import repo
 from modules.financas import comum
+from modules.ui import plural
 
 LIMITE = 50
 _STATUS = {"concluida": ("Concluída", "ok"), "desfeita": ("Desfeita", "off")}
 _CABECALHO = ("Data/hora", "Arquivo", "Banco", "Observação", "Período", "Importados", "Status")
-
-
-def _plural(n, singular, plural):
-    return f"{n} {singular if n == 1 else plural}"
 
 
 def _vazio():
@@ -34,9 +31,9 @@ def _linha_html(i):
     banco = comum.selo_banco(i["banco_sigla"], i["banco_nome"], i["banco_cor"]) if i["banco_nome"] else _vazio()
     detalhes = []
     if i["qtd_duplicadas"]:
-        detalhes.append(_plural(i["qtd_duplicadas"], "já existia", "já existiam"))
+        detalhes.append(plural(i["qtd_duplicadas"], "já existia", "já existiam"))
     if i["qtd_ignoradas"]:
-        detalhes.append(_plural(i["qtd_ignoradas"], "ignorado", "ignorados"))
+        detalhes.append(plural(i["qtd_ignoradas"], "ignorado", "ignorados"))
     detalhe = f"<small>{' · '.join(detalhes)}</small>" if detalhes else ""
     periodo = f'{i["periodo_inicio"]:%d/%m/%Y} a {i["periodo_fim"]:%d/%m/%Y}'
     return (
@@ -70,8 +67,6 @@ def render_historico():
                         comum.md('<div class="fin-hist-reserva"></div>')
 
 
-# ---------- desfazer ----------
-
 def abrir_desfazer(importacao):
     st.session_state.fin_hist_desf = {"id": importacao["id"], "arquivo": importacao["arquivo"]}
     _dialogo_desfazer()
@@ -86,7 +81,7 @@ def _dialogo_desfazer():
         comum.md(f"<p>Nenhum lançamento desta importação existe mais no Extrato (<b>{arquivo}</b>). "
                  "Só o registro será marcado como desfeito.</p>")
     else:
-        comum.md(f"<p>Apagar {_plural(n, 'lançamento', 'lançamentos')} desta importação do Extrato?</p>"
+        comum.md(f"<p>Apagar {plural(n, 'lançamento', 'lançamentos')} desta importação do Extrato?</p>"
                  f"<p class='fin-hist-dica'>Arquivo: <b>{arquivo}</b>. Os lançamentos que você editou depois também "
                  "são apagados. Depois de desfazer, o arquivo pode ser importado de novo.</p>")
     st.html('<div class="dlg-rodape-linha"></div>')
@@ -98,5 +93,5 @@ def _dialogo_desfazer():
         apagados = repo.desfazer_importacao(estado["id"])
         st.session_state.pop("fin_hist_desf", None)
         comum.avisar("Esta importação já foi desfeita." if apagados is None
-                     else _plural(apagados, "lançamento removido", "lançamentos removidos"))
+                     else plural(apagados, "lançamento removido", "lançamentos removidos"))
         st.rerun()

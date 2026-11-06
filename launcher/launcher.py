@@ -1,14 +1,13 @@
-"""Abre o ATLAS numa janela própria: sobe o Streamlit escondido e mostra o app via pywebview.
+"""Abre o ATLAS numa janela própria: sobe o Streamlit escondido e mostra o app no pywebview.
 
-Uso: pythonw launcher\\launcher.py   (o atalho criado por criar_atalho.ps1 faz isso).
-Ao fechar a janela, o servidor Streamlit é encerrado junto.
+Uso: pythonw launcher\\launcher.py (o atalho criado por criar_atalho.ps1 faz isso). Fechar a janela encerra o
+servidor Streamlit junto.
 """
 import ctypes
 import os
 import socket
 import subprocess
 import sys
-import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -25,6 +24,18 @@ LOG = Path(os.environ.get("LOCALAPPDATA", RAIZ)) / "ATLAS" / "atlas.log"
 user32 = ctypes.windll.user32
 dwmapi = ctypes.windll.dwmapi
 
+SW_RESTORE = 9
+ERROR_ALREADY_EXISTS = 183
+WINDOWS_11_BUILD = 22000
+DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+DWMWA_BORDER_COLOR = 34
+DWMWA_CAPTION_COLOR = 35
+DWMWA_TEXT_COLOR = 36
+IMAGE_ICON = 1
+LR_LOADFROMFILE = 0x10
+WM_SETICON = 0x80
+ICON_SMALL, ICON_BIG = 0, 1
+
 TELA_ABERTURA = f"""
 <html><body style="margin:0;background:{COR_FUNDO};color:#ececf1;font-family:Segoe UI,sans-serif;
 display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh">
@@ -34,24 +45,22 @@ display:flex;flex-direction:column;align-items:center;justify-content:center;hei
 """
 
 
-# ---------- instância única ----------
 def _trazer_janela_existente():
     hwnd = user32.FindWindowW(None, TITULO)
     if hwnd:
-        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.ShowWindow(hwnd, SW_RESTORE)
         user32.SetForegroundWindow(hwnd)
 
 
 def _garantir_instancia_unica():
-    # o mutex vive enquanto o processo viver; guardado em global para não ser coletado
+    # O mutex vive enquanto o processo viver, então fica em uma global para não ser coletado.
     global _mutex
     _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "ATLAS.Dashboard.Instancia")
-    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
         _trazer_janela_existente()
         sys.exit(0)
 
 
-# ---------- servidor Streamlit ----------
 def _porta_livre():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -61,23 +70,24 @@ def _porta_livre():
 def _iniciar_streamlit(porta):
     LOG.parent.mkdir(parents=True, exist_ok=True)
     python = Path(sys.executable)
-    if python.name.lower() == "pythonw.exe":  # python.exe + CREATE_NO_WINDOW dá logs sem abrir console
+    # Com python.exe e CREATE_NO_WINDOW o log sai em arquivo sem abrir um console.
+    if python.name.lower() == "pythonw.exe":
         python = python.with_name("python.exe")
     comando = [
         str(python), "-m", "streamlit", "run", "app.py",
         "--server.port", str(porta), "--server.address", "127.0.0.1",
         "--server.headless", "true", "--browser.gatherUsageStats", "false",
     ]
-    log = open(LOG, "w", encoding="utf-8")
-    return subprocess.Popen(
-        comando, cwd=RAIZ, stdout=log, stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    )
+    with open(LOG, "w", encoding="utf-8") as log:
+        return subprocess.Popen(
+            comando, cwd=RAIZ, stdout=log, stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
 
 
 def _encerrar_streamlit(proc):
     if proc.poll() is None:
-        # /T derruba também os processos filhos do Streamlit
+        # O /T também derruba os processos filhos do Streamlit.
         subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
                        creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
 
@@ -94,14 +104,12 @@ def _aguardar_pronto(proc, porta):
     return False
 
 
-# ---------- aparência da janela (Windows) ----------
 def _colorref(hex_cor):
     r, g, b = (int(hex_cor[i:i + 2], 16) for i in (1, 3, 5))
     return ctypes.c_int(r | (g << 8) | (b << 16))
 
 
 def _estilizar_janela():
-    """Barra de título escura, cor do ATLAS no Windows 11 e ícone próprio na barra de tarefas."""
     hwnd = 0
     for _ in range(50):
         hwnd = user32.FindWindowW(None, TITULO)
@@ -111,21 +119,21 @@ def _estilizar_janela():
     if not hwnd:
         return
     escuro = ctypes.c_int(1)
-    dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(escuro), 4)  # modo escuro (Win10 20H1+ e Win11)
-    if sys.getwindowsversion().build >= 22000:  # cores exatas só existem no Windows 11
-        for atributo, cor in ((35, COR_FUNDO), (34, COR_FUNDO), (36, "#ececf1")):  # barra, borda, texto
+    dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(escuro), 4)
+    # As cores exatas só existem no Windows 11.
+    if sys.getwindowsversion().build >= WINDOWS_11_BUILD:
+        for atributo, cor in ((DWMWA_CAPTION_COLOR, COR_FUNDO), (DWMWA_BORDER_COLOR, COR_FUNDO), (DWMWA_TEXT_COLOR, "#ececf1")):
             valor = _colorref(cor)
             dwmapi.DwmSetWindowAttribute(hwnd, atributo, ctypes.byref(valor), 4)
     if ICONE.exists():
-        for tipo, tamanho in ((0, 16), (1, 32)):  # ICON_SMALL, ICON_BIG
-            hicon = user32.LoadImageW(None, str(ICONE), 1, tamanho, tamanho, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
-            user32.SendMessageW(hwnd, 0x80, tipo, hicon)  # WM_SETICON
+        for tipo, tamanho in ((ICON_SMALL, 16), (ICON_BIG, 32)):
+            hicon = user32.LoadImageW(None, str(ICONE), IMAGE_ICON, tamanho, tamanho, LR_LOADFROMFILE)
+            user32.SendMessageW(hwnd, WM_SETICON, tipo, hicon)
 
 
-# ---------- principal ----------
 def main():
     _garantir_instancia_unica()
-    # sem isto a barra de tarefas agrupa o ATLAS sob o ícone do Python
+    # Sem isto a barra de tarefas agrupa o ATLAS sob o ícone do Python.
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ATLAS.Dashboard")
 
     porta = _porta_livre()

@@ -1,13 +1,12 @@
-"""Listas do Extrato (↗ Entradas do mês, ↙ Gastos Fixos, ↘ Gastos Variáveis): uma linha por lançamento."""
 from html import escape
 
 import streamlit as st
 
-from database import financas_calculos as calc
+from database.dinheiro import ZERO, fmt_brl
 from modules.financas import comum
 from modules.financas.extrato import dialogos
 
-# altura da área rolável de cada lista: o cartão fica com a altura aproximada do formulário
+# Altura da área rolável de cada lista, para o cartão ficar com a altura do formulário.
 LISTA_ALTURA = 372
 
 # chave: (título, ícone, texto do estado vazio)
@@ -23,43 +22,43 @@ _CABECALHO = (
 )
 
 
-def _banco_titulo(l):
-    if l["forma"] == "dinheiro":
+def _banco_titulo(lanc):
+    if lanc["forma"] == "dinheiro":
         return "Dinheiro"
-    return l["banco_nome"] if l.get("banco_id") is not None else "Sem banco"
+    return lanc["banco_nome"] if lanc.get("banco_id") is not None else "Sem banco"
 
 
-def _linha(l):
-    i = l["id"]
+def _linha(lanc):
+    i = lanc["id"]
     with st.container(horizontal=True, vertical_alignment="center", gap=None, key=f"fin_ext_lin_{i}"):
         comum.md(
-            f'<div class="fin-ext-grade"><span class="fin-ext-data">{l["data"]:%d/%m}</span>'
-            f'{comum.descricao_html(l)}'
-            f'<span class="fin-ext-valor">{comum.valor_html(l)}</span>'
-            f'<span class="fin-ext-forma" title="{comum.FORMA_ROTULO[l["forma"]]}">{comum.forma_html(l["forma"])}</span>'
-            f'<span class="fin-ext-banco" title="{escape(_banco_titulo(l), quote=True)}">{comum.banco_html(l)}</span>'
+            f'<div class="fin-ext-grade"><span class="fin-ext-data">{lanc["data"]:%d/%m}</span>'
+            f'{comum.descricao_html(lanc)}'
+            f'<span class="fin-ext-valor">{comum.valor_html(lanc)}</span>'
+            f'<span class="fin-ext-forma" title="{comum.FORMA_ROTULO[lanc["forma"]]}">{comum.forma_html(lanc["forma"])}</span>'
+            f'<span class="fin-ext-banco" title="{escape(_banco_titulo(lanc), quote=True)}">{comum.banco_html(lanc)}</span>'
             '</div>',
             width="stretch",
         )
         with st.container(horizontal=True, gap="xsmall", width="content", key=f"fin_ext_acoes_{i}"):
-            observacao = (l.get("observacao") or "").strip()
-            # a dica do botão é Markdown (sem HTML): o texto do usuário vai com os símbolos escapados
+            # A dica do botão é Markdown, sem HTML: o texto do usuário vai com os símbolos escapados.
+            observacao = (lanc.get("observacao") or "").strip()
             st.button("", icon=":material/sticky_note_2:", key=f"fin_ext_bobs_{i}", disabled=not observacao,
                       help=comum.texto_markdown(observacao) if observacao else "Sem observação")
             if st.button("", icon=":material/edit:", key=f"fin_ext_bed_{i}", help="Editar"):
-                dialogos.abrir_edicao(l)
+                dialogos.abrir_edicao(lanc)
             if st.button("", icon=":material/delete:", key=f"fin_ext_bdel_{i}", help="Excluir"):
-                dialogos.dialogo_exclusao(l)
+                dialogos.dialogo_exclusao(lanc)
 
 
 def bloco(tipo, lancamentos, mes, filtrado):
     titulo, icone_nome, texto_vazio = BLOCOS[tipo]
-    total = sum((l["valor"] for l in lancamentos), calc.ZERO)
+    total = sum((lanc["valor"] for lanc in lancamentos), ZERO)
     with st.container(key=f"fin_card_ext_{tipo}"):
         with st.container(horizontal=True, vertical_alignment="center", gap="small", key=f"fin_ext_topo_{tipo}"):
             classe = "entrada" if tipo == "entrada" else "saida"
             comum.cabecalho_cartao(
-                f'{titulo}<span class="fin-ext-total {classe}">· {calc.fmt_brl(total)}</span>',
+                f'{titulo}<span class="fin-ext-total {classe}">· {fmt_brl(total)}</span>',
                 icone_nome,
                 '<span class="fin-selo">filtrado</span>' if filtrado else "",
             )
@@ -71,5 +70,5 @@ def bloco(tipo, lancamentos, mes, filtrado):
                 comum.vazio("Nada com os filtros escolhidos." if filtrado else texto_vazio)
                 return
             comum.md(_CABECALHO)
-            for l in lancamentos:
-                _linha(l)
+            for lanc in lancamentos:
+                _linha(lanc)

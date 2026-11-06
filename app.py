@@ -5,19 +5,26 @@ import streamlit as st
 
 from database.connection import init_db
 from modules import financas, home, metas
+from modules.metas.cartao import recolher_cartoes
+from modules.ui import corpo_ativo
 
 ASSETS = Path(__file__).parent / "assets"
 _favicon = ASSETS / "favicon.png"
 
-# ícone da aba do navegador: o A recortado da logo (emoji enquanto o arquivo não existir)
 st.set_page_config(page_title="ATLAS", page_icon=str(_favicon) if _favicon.exists() else "🪐", layout="wide")
 
-# a rede geométrica do fundo é um SVG embutido no CSS (o marcador __REDE__ vira um data URI)
+# A rede de fundo e a fonte entram no CSS como data URI (marcadores __REDE__ e __FONTE__): o app não depende de
+# arquivos servidos nem de internet.
 _rede = base64.b64encode((ASSETS / "rede.svg").read_bytes()).decode()
-_css = (ASSETS / "style.css").read_text(encoding="utf-8").replace("__REDE__", f"data:image/svg+xml;base64,{_rede}")
+_fonte = base64.b64encode((ASSETS / "fonts" / "outfit-latin.woff2").read_bytes()).decode()
+_css = (
+    (ASSETS / "style.css").read_text(encoding="utf-8")
+    .replace("__REDE__", f"data:image/svg+xml;base64,{_rede}")
+    .replace("__FONTE__", f"data:font/woff2;base64,{_fonte}")
+)
 st.markdown(f"<style>{_css}</style>", unsafe_allow_html=True)
 
-# Para adicionar um módulo novo: criar modules/<nome>.py com render() e registrar aqui.
+# Para criar um módulo: modules/<nome>.py com render(), registrado aqui.
 MODULOS = {
     "Início": (":material/home:", home.render),
     "Metas Pessoais": (":material/flag:", metas.render),
@@ -28,7 +35,6 @@ MODULOS = {
 @st.cache_resource
 def _preparar_banco():
     init_db()
-    return True
 
 
 try:
@@ -46,14 +52,14 @@ if "pagina" not in st.session_state:
 def _item_menu(nome):
     icone = MODULOS[nome][0]
     ativo = st.session_state.pagina == nome
-    if st.button(nome, icon=icone, key=f"nav_{nome}", use_container_width=True,
+    if st.button(nome, icon=icone, key=f"nav_{nome}", width="stretch",
                  type="primary" if ativo else "secondary"):
         st.session_state.pagina = nome
-        metas.recolher_cartoes()
+        recolher_cartoes()
         st.rerun()
 
 
-# dados de exemplo da conta (visual por enquanto; virão do login)
+# Conta de exemplo, só para a sidebar. Sai quando existir login.
 CONTA = {"iniciais": "VC", "nome": "Vinicius", "email": "vinicius@exemplo.com"}
 
 with st.sidebar:
@@ -72,11 +78,5 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-# cada módulo tem a sua posição na página e todas são criadas antes de desenhar: os inativos viram st.empty(),
-# o que apaga na hora o que o módulo anterior desenhou (o Streamlit o manteria na tela, esmaecido, até o novo terminar)
-_corpos = {
-    nome: st.container(key=f"modulo_{nome}") if nome == st.session_state.pagina else st.empty()
-    for nome in MODULOS
-}
-with _corpos[st.session_state.pagina]:
+with corpo_ativo(MODULOS, st.session_state.pagina, "modulo_"):
     MODULOS[st.session_state.pagina][1]()

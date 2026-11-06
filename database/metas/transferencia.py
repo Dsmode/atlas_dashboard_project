@@ -1,63 +1,49 @@
-"""Exportação e importação do módulo Metas Pessoais (metas, tarefas e categorias) em JSON.
+"""Exportação e importação das Metas Pessoais (metas, tarefas e categorias) em JSON.
 
-O arquivo não leva `id`: eles são auto-incrementais e não valem entre bancos. Metas duplicadas são as de
-mesmo título (sem diferenciar caixa e acentos) e mesmo prazo; categorias, as de mesmo nome. O arquivo é
-tratado como dado não confiável: tudo passa por `ler_arquivo`, que valida e normaliza antes de gravar.
-"""
+O arquivo não leva `id`, porque o auto-incremento não vale entre bancos. Meta duplicada é a de mesmo título
+(sem diferenciar caixa e acento) e mesmo prazo; categoria duplicada é a de mesmo nome. O arquivo é tratado
+como dado não confiável: tudo passa por `ler_arquivo`, que valida e normaliza antes de gravar."""
+
 import json
-import re
-import unicodedata
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from database import metas_repo as repo
+from database.arquivos import TAMANHO_MAX, ArquivoInvalido
 from database.connection import get_cursor
-from database.metas_progresso import LIMITE, OBJETIVOS, TIPOS, fmt_brl, fmt_qtd, validar
+from database.cores import cor_valida
+from database.dinheiro import VALOR_MAX, fmt_brl
+from database.metas import repo
+from database.metas.modelo import (
+    CAMPOS_PROGRESSO,
+    CATEGORIA_NOME_MAX,
+    DESCRICAO_MAX,
+    PRIORIDADES,
+    STATUS,
+    TAREFA_MAX,
+    TIPOS_NOME,
+    TITULO_MAX,
+    UNIDADE_MAX,
+)
+from database.metas.progresso import OBJETIVOS, TIPOS, fmt_qtd, validar
+from database.texto import normalizar
 
 FORMATO = "atlas-metas"
 VERSAO = 2
-TAMANHO_MAX = 10 * 1024 * 1024  # bytes
-
-PRIORIDADES = {"baixa": "Baixa", "media": "Média", "alta": "Alta"}
-STATUS = {"ativa": "Ativa", "concluida": "Concluída", "arquivada": "Arquivada"}
-TIPOS_NOME = {"tarefas": "Tarefas", "quantidade": "Quantidade", "valor": "Valor"}
-CAMPOS_PROGRESSO = ("tipo_progresso", "objetivo", "unidade", "valor_inicial", "valor_alvo", "valor_atual")
-UNIDADE_MAX = 30
-COR_PADRAO = "#b44cff"
-
-TITULO_MAX = 150
-DESCRICAO_MAX = 16000
-TAREFA_MAX = 255
-CATEGORIA_MAX = 30
-
-
-class ArquivoInvalido(Exception):
-    """O arquivo não é um export válido; a mensagem diz o motivo, em português."""
-
-
-def normalizar(texto):
-    """Minúsculas e sem acentos (a mesma regra da busca, e a do collation das categorias no banco)."""
-    decomposto = unicodedata.normalize("NFKD", texto or "")
-    return "".join(c for c in decomposto if not unicodedata.combining(c)).casefold().strip()
-
 
 def chave_meta(meta):
     return normalizar(meta["titulo"]), meta["prazo"]
 
-
-# ---------- exportar ----------
 
 def _data(d):
     return d.isoformat(timespec="seconds") if isinstance(d, datetime) else (d.isoformat() if d else None)
 
 
 def _dinheiro(valor):
-    """Valor decimal como texto ("1200.00"), para o JSON não perder precisão."""
+    """Texto ("1200.00"), para o JSON não perder precisão."""
     return None if valor is None else str(Decimal(valor).quantize(Decimal("0.01")))
 
 
 def carregar_atuais():
-    """Metas e categorias do banco no mesmo formato do arquivo lido (as metas trazem também o `id`)."""
     tarefas = {}
     for t in repo.listar_tarefas():
         tarefas.setdefault(t["meta_id"], []).append({
@@ -86,7 +72,6 @@ def contagens(metas, categorias):
 
 
 def exportar_json(agora=None):
-    """Bytes do arquivo com tudo do módulo e as contagens (metas, tarefas, categorias)."""
     metas, categorias = carregar_atuais()
     documento = {
         "formato": FORMATO,
@@ -116,8 +101,6 @@ def exportar_json(agora=None):
     dados = json.dumps(documento, ensure_ascii=False, indent=2).encode("utf-8")
     return dados, contagens(metas, categorias)
 
-
-# ---------- ler e validar o arquivo ----------
 
 def _texto(valor, rotulo, maximo, obrigatorio=False):
     if valor is None or (isinstance(valor, str) and not valor.strip()):
@@ -153,12 +136,7 @@ def _opcao(valor, validos, padrao, rotulo):
     return valor
 
 
-def cor_valida(valor):
-    return valor.lower() if isinstance(valor, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", valor) else COR_PADRAO
-
-
 def _decimal(valor, rotulo):
-    """Número do arquivo (inteiro, decimal ou texto numérico) com duas casas; vazio vira None."""
     if valor is None or valor == "":
         return None
     if isinstance(valor, bool) or not isinstance(valor, (int, float, str)):
@@ -167,13 +145,13 @@ def _decimal(valor, rotulo):
         numero = Decimal(str(valor).strip())
     except InvalidOperation:
         raise ArquivoInvalido(f"{rotulo}: número inválido ({str(valor)[:30]!r}).") from None
-    if not numero.is_finite() or abs(numero) > LIMITE:
+    if not numero.is_finite() or abs(numero) > VALOR_MAX:
         raise ArquivoInvalido(f"{rotulo}: valor grande demais.")
     return numero.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _progresso(m, r):
-    """Campos de progresso da meta do arquivo, já validados; metas sem tipo (v1) são de tarefas."""
+    """Progresso da meta do arquivo, já validado. Metas sem tipo (arquivos v1) são de tarefas."""
     tipo = _opcao(m.get("tipo_progresso"), TIPOS, "tarefas", f"{r} (tipo de progresso)")
     if tipo == "tarefas":
         return {"tipo_progresso": tipo, "objetivo": "aumentar", "unidade": None,
@@ -206,11 +184,7 @@ def _objeto(valor, rotulo):
     return valor
 
 
-def ler_arquivo(dados):
-    """Valida e normaliza o conteúdo (bytes). Devolve {"metas", "categorias", "repetidas"}.
-
-    `repetidas` conta as metas que repetem título e prazo de outra do próprio arquivo (só a primeira fica).
-    Levanta ArquivoInvalido com o motivo se algo estiver errado; nada é gravado aqui."""
+def _abrir_documento(dados):
     if len(dados) > TAMANHO_MAX:
         raise ArquivoInvalido("O arquivo é grande demais (limite de 10 MB).")
     try:
@@ -223,8 +197,50 @@ def ler_arquivo(dados):
     versao = doc.get("versao")
     if not isinstance(versao, int) or versao > VERSAO:
         raise ArquivoInvalido("O arquivo é de uma versão mais nova do ATLAS; atualize o sistema para importá-lo.")
+    return doc
 
-    categorias = {}  # nome normalizado -> {"nome", "cor"}
+
+def _ler_tarefa(t, rotulo):
+    t = _objeto(t, rotulo)
+    return {
+        "descricao": _texto(t.get("descricao"), f"{rotulo} (descrição)", TAREFA_MAX, True),
+        "prazo": _quando(t.get("prazo"), f"{rotulo} (prazo)", True),
+        "concluida": t.get("concluida") is True,
+        "data_criacao": _quando(t.get("data_criacao"), f"{rotulo} (data de criação)", False),
+        "data_conclusao": _quando(t.get("data_conclusao"), f"{rotulo} (data de conclusão)", False),
+    }
+
+
+def _ler_meta(m, rotulo, registrar_categoria):
+    m = _objeto(m, rotulo)
+    meta = {
+        "titulo": _texto(m.get("titulo"), f"{rotulo} (título)", TITULO_MAX, True),
+        "descricao": _texto(m.get("descricao"), f"{rotulo} (descrição)", DESCRICAO_MAX),
+        "prioridade": _opcao(m.get("prioridade"), PRIORIDADES, "media", f"{rotulo} (prioridade)"),
+        "prazo": _quando(m.get("prazo"), f"{rotulo} (prazo)", True),
+        "status": _opcao(m.get("status"), STATUS, "ativa", f"{rotulo} (status)"),
+        "data_criacao": _quando(m.get("data_criacao"), f"{rotulo} (data de criação)", False),
+        "data_conclusao": _quando(m.get("data_conclusao"), f"{rotulo} (data de conclusão)", False),
+        "categorias": [], "tarefas": [], **_progresso(m, rotulo),
+    }
+    nomes = set()
+    for nome in _lista(m.get("categorias"), f"{rotulo} (categorias)"):
+        nome = _texto(nome, f"{rotulo} (categoria)", CATEGORIA_NOME_MAX, True)
+        if normalizar(nome) not in nomes:
+            nomes.add(normalizar(nome))
+            meta["categorias"].append(registrar_categoria(nome))
+    # Metas de quantidade ou valor não têm checklist: as tarefas do arquivo são ignoradas.
+    tarefas_arquivo = _lista(m.get("tarefas"), f"{rotulo} (tarefas)") if meta["tipo_progresso"] == "tarefas" else []
+    meta["tarefas"] = [_ler_tarefa(t, f"{rotulo}, tarefa {j}") for j, t in enumerate(tarefas_arquivo, 1)]
+    return meta
+
+
+def ler_arquivo(dados):
+    """Valida e normaliza o conteúdo (bytes). Devolve {metas, categorias, repetidas}, onde `repetidas` conta as
+    metas que repetem título e prazo de outra do próprio arquivo (só a primeira fica). Levanta
+    ArquivoInvalido com o motivo; nada é gravado aqui."""
+    doc = _abrir_documento(dados)
+    categorias = {}
 
     def registrar(nome, cor=None):
         norm = normalizar(nome)
@@ -234,40 +250,11 @@ def ler_arquivo(dados):
 
     for i, c in enumerate(_lista(doc.get("categorias"), "Categorias"), 1):
         c = _objeto(c, f"Categoria {i}")
-        registrar(_texto(c.get("nome"), f"Categoria {i} (nome)", CATEGORIA_MAX, True), c.get("cor"))
+        registrar(_texto(c.get("nome"), f"Categoria {i} (nome)", CATEGORIA_NOME_MAX, True), c.get("cor"))
 
     metas, vistas, repetidas = [], set(), 0
     for i, m in enumerate(_lista(doc.get("metas"), "Metas"), 1):
-        r = f"Meta {i}"
-        m = _objeto(m, r)
-        meta = {
-            "titulo": _texto(m.get("titulo"), f"{r} (título)", TITULO_MAX, True),
-            "descricao": _texto(m.get("descricao"), f"{r} (descrição)", DESCRICAO_MAX),
-            "prioridade": _opcao(m.get("prioridade"), PRIORIDADES, "media", f"{r} (prioridade)"),
-            "prazo": _quando(m.get("prazo"), f"{r} (prazo)", True),
-            "status": _opcao(m.get("status"), STATUS, "ativa", f"{r} (status)"),
-            "data_criacao": _quando(m.get("data_criacao"), f"{r} (data de criação)", False),
-            "data_conclusao": _quando(m.get("data_conclusao"), f"{r} (data de conclusão)", False),
-            "categorias": [], "tarefas": [], **_progresso(m, r),
-        }
-        nomes = set()
-        for nome in _lista(m.get("categorias"), f"{r} (categorias)"):
-            nome = _texto(nome, f"{r} (categoria)", CATEGORIA_MAX, True)
-            if normalizar(nome) not in nomes:
-                nomes.add(normalizar(nome))
-                meta["categorias"].append(registrar(nome))
-        # metas de quantidade/valor não têm checklist: tarefas do arquivo são ignoradas
-        tarefas_arquivo = _lista(m.get("tarefas"), f"{r} (tarefas)") if meta["tipo_progresso"] == "tarefas" else []
-        for j, t in enumerate(tarefas_arquivo, 1):
-            rt = f"{r}, tarefa {j}"
-            t = _objeto(t, rt)
-            meta["tarefas"].append({
-                "descricao": _texto(t.get("descricao"), f"{rt} (descrição)", TAREFA_MAX, True),
-                "prazo": _quando(t.get("prazo"), f"{rt} (prazo)", True),
-                "concluida": t.get("concluida") is True,
-                "data_criacao": _quando(t.get("data_criacao"), f"{rt} (data de criação)", False),
-                "data_conclusao": _quando(t.get("data_conclusao"), f"{rt} (data de conclusão)", False),
-            })
+        meta = _ler_meta(m, f"Meta {i}", registrar)
         chave = chave_meta(meta)
         if chave in vistas:
             repetidas += 1
@@ -277,16 +264,18 @@ def ler_arquivo(dados):
     return {"metas": metas, "categorias": list(categorias.values()), "repetidas": repetidas}
 
 
-# ---------- comparar (mesclagem) ----------
-
 def _assinatura(meta):
-    """O que define a meta para comparar: tudo menos as datas de criação e conclusão."""
+    """Tudo que define a meta na comparação, exceto as datas de criação e de conclusão."""
     return (
         meta["titulo"].strip(), (meta["descricao"] or "").strip(), meta["prioridade"], meta["prazo"], meta["status"],
         frozenset(normalizar(n) for n in meta["categorias"]),
         tuple(meta[campo] for campo in CAMPOS_PROGRESSO),
-        tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in meta["tarefas"]),
+        _tarefas(meta),
     )
+
+
+def _tarefas(meta):
+    return tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in meta["tarefas"])
 
 
 def _resumo_tarefas(meta):
@@ -296,7 +285,6 @@ def _resumo_tarefas(meta):
 
 
 def _texto_progresso(meta):
-    """Progresso em uma frase: "7 de 12 livros", "R$ 1.200,00 de R$ 5.000,00", "3 de 5 tarefas"."""
     if meta["tipo_progresso"] == "tarefas":
         feitas = sum(1 for t in meta["tarefas"] if t["concluida"])
         return f"{feitas} de {len(meta['tarefas'])} tarefas"
@@ -310,7 +298,6 @@ def _texto_progresso(meta):
 
 
 def diferencas(atual, importada):
-    """Lista de (rótulo, valor atual, valor importado) só dos campos que diferem, em texto para exibir."""
     campos = [
         ("Título", lambda m: m["titulo"]),
         ("Descrição", lambda m: m["descricao"] or "sem descrição"),
@@ -323,8 +310,7 @@ def diferencas(atual, importada):
     if tipos[0] != tipos[1]:
         saida.append(("Tipo de progresso", TIPOS_NOME[tipos[0]], TIPOS_NOME[tipos[1]]))
     if tipos == ("tarefas", "tarefas"):
-        tarefas = lambda m: tuple((t["descricao"].strip(), t["prazo"], bool(t["concluida"])) for t in m["tarefas"])
-        if tarefas(atual) != tarefas(importada):
+        if _tarefas(atual) != _tarefas(importada):
             saida.append(("Tarefas", _resumo_tarefas(atual), _resumo_tarefas(importada)))
     elif _texto_progresso(atual) != _texto_progresso(importada):
         saida.append(("Progresso", _texto_progresso(atual), _texto_progresso(importada)))
@@ -332,12 +318,9 @@ def diferencas(atual, importada):
 
 
 def planejar_mesclagem(arquivo, metas_atuais, categorias_atuais):
-    """Compara o arquivo lido com o banco, sem gravar nada.
-
-    Devolve: `novas` (metas sem par), `identicas` (quantas já existem iguais; ficam como estão),
-    `conflitos` (mesma chave, conteúdo diferente: dicts `atual`, `importada`, `diferencas`),
-    `categorias_novas` e `categorias_conflito` (mesmo nome com cor diferente: `nome`, `cor_atual`,
-    `cor_importada`)."""
+    """Compara o arquivo com o banco sem gravar nada. Devolve `novas` (metas sem par), `identicas` (já existem
+    iguais e ficam como estão), `conflitos` (mesma chave, conteúdo diferente: atual, importada e
+    diferencas), `categorias_novas` e `categorias_conflito` (mesmo nome, cor diferente)."""
     por_chave = {}
     for m in metas_atuais:
         por_chave.setdefault(chave_meta(m), m)
@@ -364,13 +347,9 @@ def planejar_mesclagem(arquivo, metas_atuais, categorias_atuais):
     }
 
 
-# ---------- gravar ----------
-
 def _sincronizar_categorias(cur, categorias, trocar_cor):
-    """Cria as categorias que faltam e troca a cor das de `trocar_cor` (nomes normalizados).
-    Devolve {nome normalizado: id}."""
     cur.execute("SELECT id, nome FROM categorias_meta")
-    ids = {normalizar(l["nome"]): l["id"] for l in cur.fetchall()}
+    ids = {normalizar(linha["nome"]): linha["id"] for linha in cur.fetchall()}
     for c in categorias:
         norm = normalizar(c["nome"])
         if norm in ids:
@@ -408,7 +387,6 @@ def _inserir_meta(cur, meta, ids_categoria):
 
 
 def _substituir_meta(cur, meta_id, meta, ids_categoria):
-    """A meta do banco passa a ser a importada por inteiro: campos, datas, categorias e tarefas."""
     cur.execute(
         "UPDATE metas SET titulo=%s, descricao=%s, prioridade=%s, prazo=%s, status=%s, "
         "data_criacao=COALESCE(%s, data_criacao), data_conclusao=%s, tipo_progresso=%s, objetivo=%s, "
@@ -422,11 +400,11 @@ def _substituir_meta(cur, meta_id, meta, ids_categoria):
 
 
 def aplicar_mesclagem(arquivo, plano, substituir=(), trocar_cores=()):
-    """Grava a mesclagem numa única transação (se algo falhar, nada muda).
+    """Grava a mesclagem numa transação: se algo falhar, nada muda.
 
-    `substituir`: posições, em `plano["conflitos"]`, das metas cuja versão importada vence; as demais
-    ficam como estão. `trocar_cores`: nomes (como em `categorias_conflito`) cuja cor importada vence.
-    Devolve {"novas", "substituidas", "mantidas", "identicas"}."""
+    `substituir` traz as posições de `plano["conflitos"]` em que a versão importada vence; as outras ficam
+    como estão. `trocar_cores` traz os nomes de `categorias_conflito` em que a cor importada vence.
+    Devolve {novas, substituidas, mantidas, identicas}."""
     substituir = set(substituir)
     trocar = {normalizar(n) for n in trocar_cores}
     with get_cursor() as cur:
@@ -443,9 +421,10 @@ def aplicar_mesclagem(arquivo, plano, substituir=(), trocar_cores=()):
 
 
 def substituir_tudo(arquivo):
-    """Apaga metas, tarefas e categorias atuais e grava as do arquivo, numa única transação."""
+    """Apaga metas, tarefas e categorias e grava as do arquivo, tudo numa transação. As tarefas e as ligações com
+    categorias saem em cascata."""
     with get_cursor() as cur:
-        cur.execute("DELETE FROM metas")  # tarefas e ligações com categorias saem em cascata
+        cur.execute("DELETE FROM metas")
         cur.execute("DELETE FROM categorias_meta")
         ids = _sincronizar_categorias(cur, arquivo["categorias"], ())
         for meta in arquivo["metas"]:
@@ -454,7 +433,6 @@ def substituir_tudo(arquivo):
 
 
 def apagar_tudo():
-    """Apaga metas, tarefas e categorias (usado depois de exportar, se a pessoa pedir)."""
     with get_cursor() as cur:
         cur.execute("DELETE FROM metas")
         cur.execute("DELETE FROM categorias_meta")

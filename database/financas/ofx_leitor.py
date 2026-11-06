@@ -1,38 +1,32 @@
-"""Leitor de arquivos OFX (extrato de conta e fatura de cartão).
+"""Leitor de OFX (extrato de conta e fatura de cartão), sem banco nem Streamlit.
 
-Função pura: recebe os bytes do arquivo e devolve dados prontos, sem tocar em banco nem em Streamlit.
-O OFX dos bancos é SGML aberto (várias tags não fecham), então a leitura é por expressões regulares, o que também
-lê o OFX 2.x (XML) e evita qualquer expansão de entidades externas. As mensagens de `ArquivoInvalido` já são para
-o usuário.
-"""
+O OFX dos bancos é SGML com tags que não fecham, então a leitura usa expressões regulares. Isso também
+cobre o OFX 2.x (XML) e evita expandir entidades externas. As mensagens de ArquivoInvalido são para o
+usuário."""
+
 import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from html import unescape
 
-TAMANHO_MAX = 10 * 1024 * 1024  # 10 MB, como as Metas
-_CENTAVO = Decimal("0.01")
-
-
-class ArquivoInvalido(ValueError):
-    """Arquivo que não é um OFX utilizável; a mensagem é mostrada ao usuário."""
+from database.arquivos import TAMANHO_MAX, ArquivoInvalido
+from database.dinheiro import CENTAVO
 
 
 @dataclass(frozen=True)
 class TransacaoOfx:
     fitid: str
     data: date
-    valor: Decimal  # com sinal: saída < 0
+    valor: Decimal  # com sinal: saída é negativa
     texto: str  # MEMO, senão NAME, senão ""
-    tipo_ofx: str
 
 
 @dataclass(frozen=True)
 class ExtratoOfx:
     origem: str  # 'conta' | 'cartao'
     instituicao: str
-    codigo_banco: str  # <FID> senão <BANKID>, sem zeros à esquerda; "" se faltar
+    codigo_banco: str  # <FID>, senão <BANKID>, sem zeros à esquerda; "" se faltar
     inicio: date | None
     fim: date | None
     transacoes: tuple
@@ -42,7 +36,7 @@ _CHARSET = re.compile(rb"(?:CHARSET|ENCODING)\s*:\s*([A-Za-z0-9\-]+)", re.I)
 
 
 def _decodificar(conteudo):
-    """O cabeçalho (CHARSET 1252 / ENCODING) decide; UTF-8 é o padrão e o Windows-1252 a segunda tentativa."""
+    """O cabeçalho (CHARSET 1252 ou ENCODING) decide. Sem ele, tenta UTF-8 e cai para Windows-1252."""
     cabecalho = conteudo[:800]
     for valor in _CHARSET.findall(cabecalho):
         if valor.upper() in (b"1252", b"WINDOWS-1252", b"CP1252"):
@@ -73,7 +67,7 @@ def _data(texto, onde, obrigatoria=True):
 def _valor(texto):
     bruto = (texto or "").strip().replace(" ", "")
     if "," in bruto and "." in bruto:
-        # os dois aparecem: o último é o separador decimal e o outro é de milhar
+        # Com ponto e vírgula juntos, o último é o separador decimal e o outro é de milhar.
         if bruto.rfind(",") > bruto.rfind("."):
             bruto = bruto.replace(".", "").replace(",", ".")
         else:
@@ -86,7 +80,7 @@ def _valor(texto):
         raise ArquivoInvalido(f"Valor inválido no arquivo: “{texto[:30]}”.") from None
     if not valor.is_finite():
         raise ArquivoInvalido(f"Valor inválido no arquivo: “{texto[:30]}”.")
-    return valor.quantize(_CENTAVO, rounding=ROUND_HALF_UP)
+    return valor.quantize(CENTAVO, rounding=ROUND_HALF_UP)
 
 
 def _texto(bloco):
@@ -104,7 +98,6 @@ def _transacoes(corpo):
             data=_data(_tag(bloco, "DTPOSTED"), "DTPOSTED"),
             valor=_valor(_tag(bloco, "TRNAMT")),
             texto=_texto(bloco),
-            tipo_ofx=_tag(bloco, "TRNTYPE").upper(),
         ))
     return tuple(saida)
 

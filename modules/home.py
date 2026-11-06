@@ -6,7 +6,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from database import metas_repo
+from database.datas import intervalo_semana
+from database.metas import repo
+from modules.graficos_base import degrade, eixo_x_discreto, tema
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
 
@@ -23,10 +25,7 @@ def _icone(nome):
 
 
 def _metas_semanais():
-    """Bloco real: metas concluídas / total com prazo na semana atual (domingo a sábado)."""
-    hoje = date.today()
-    inicio = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
-    concluidas, total = metas_repo.contar_metas_no_periodo(inicio, inicio + timedelta(days=6))
+    concluidas, total = repo.contar_metas_no_periodo(*intervalo_semana(date.today()))
     pct = round(concluidas / total * 100) if total else 0
     return (
         f'<div class="home-tile"><div class="tile-head"><span>Metas Semanais</span>{_icone("flag")}</div>'
@@ -47,7 +46,7 @@ _PRAZOS = f"""
 
 _JANELA = 12  # períodos mostrados no gráfico de metas do período
 _PERIODOS = {"Semana": ("semana", f"Últimas {_JANELA} semanas"), "Mês": ("mes", f"Últimos {_JANELA} meses")}
-# (campo no repositório, rótulo, cor, opacidade): concluídas cheias, pendentes como "vazio" a preencher
+# (campo no repositório, rótulo, cor, opacidade): concluídas cheias, pendentes como um vazio a preencher.
 _SERIES = [
     ("concluidas", "Concluídas", "#b44cff", 1),
     ("pendentes", "Pendentes", "#b44cff", 0.3),
@@ -56,7 +55,7 @@ _SERIES = [
 
 
 def _guardar_periodo():
-    """Guarda a escolha Semana/Mês; clicar na opção ativa a desmarcaria, então volta para ela."""
+    """Guarda a escolha Semana ou Mês. Clicar na opção ativa a desmarcaria, então a escolha anterior volta."""
     escolha = st.session_state.home_periodo
     if escolha is None:
         st.session_state.home_periodo = st.session_state.home_periodo_salvo
@@ -65,7 +64,6 @@ def _guardar_periodo():
 
 
 def _grafico_periodo(periodos, por):
-    """Barras empilhadas por semana ou mês do prazo: concluídas, pendentes e atrasadas."""
     segmentos, totais = [], []
     for p in periodos:
         d = p["inicio"]
@@ -82,20 +80,15 @@ def _grafico_periodo(periodos, por):
                 segmentos.append({"rotulo": rotulo, "faixa": faixa, "serie": nome, "ordem": ordem,
                                   "metas": p[campo], "soma": soma, "opacidade": opacidade})
     maior = max(3, max(t["soma"] for t in totais))
-    # o domínio fixo mantém a ordem do tempo mesmo com períodos sem nenhuma barra
+    # O domínio fixo mantém a ordem do tempo mesmo com períodos sem nenhuma barra.
     eixo_x = alt.X(
         "rotulo:N", sort=None, title=None, scale=alt.Scale(domain=[t["rotulo"] for t in totais]),
-        axis=alt.Axis(labelAngle=0, labelOverlap="parity", labelColor="#8d8d9c", labelFontSize=10,
-                      ticks=False, domainColor="rgba(255,255,255,.12)", labelPadding=6),
+        axis=eixo_x_discreto(),
     )
     escala_y = alt.Scale(domain=[0, maior * 1.2])
     nomes = [nome for _, nome, *_ in _SERIES]
-    degrade = alt.Gradient(
-        gradient="linear", x1=1, y1=0, x2=1, y2=1,
-        stops=[alt.GradientStop(color="#d68bff", offset=0), alt.GradientStop(color="#7a2fd1", offset=1)],
-    )
     cor = alt.condition(
-        f"datum.serie == '{nomes[0]}'", alt.value(degrade),
+        f"datum.serie == '{nomes[0]}'", alt.value(degrade("#d68bff", "#7a2fd1")),
         alt.Color("serie:N", legend=None, scale=alt.Scale(domain=nomes, range=[c for _, _, c, _ in _SERIES])),
     )
     barras = alt.Chart(pd.DataFrame(segmentos)).mark_bar(
@@ -115,12 +108,7 @@ def _grafico_periodo(periodos, por):
         x=eixo_x, y=alt.Y("soma:Q", axis=None, scale=escala_y),
         text=alt.condition("datum.soma > 0", "soma:Q", alt.value("")),
     )
-    return (
-        (barras + valores)
-        .properties(height=180)
-        .configure(background="transparent", font="Outfit, sans-serif")
-        .configure_view(stroke=None)
-    )
+    return tema((barras + valores).properties(height=180))
 
 
 def _legenda(periodos):
@@ -134,7 +122,7 @@ def _legenda(periodos):
 
 @st.fragment
 def _tile_periodo():
-    """Cartão real: metas com prazo por semana ou mês, empilhadas (só este trecho recarrega ao trocar)."""
+    """Cartão com as metas do período, por semana ou mês, empilhadas. Só este trecho recarrega ao trocar."""
     st.session_state.setdefault("home_periodo_salvo", "Semana")
     with st.container(key="tile_concluidas"):
         st.markdown(
@@ -147,7 +135,7 @@ def _tile_periodo():
             on_change=_guardar_periodo, label_visibility="collapsed", width="stretch",
         ) or st.session_state.home_periodo_salvo
         por, janela = _PERIODOS[escolha]
-        periodos = metas_repo.contar_metas_por_periodo(por, _JANELA)
+        periodos = repo.contar_metas_por_periodo(por, _JANELA)
         total = sum(p[campo] for p in periodos for campo, *_ in _SERIES)
         concluidas = sum(p["concluidas"] for p in periodos)
         nota.markdown(

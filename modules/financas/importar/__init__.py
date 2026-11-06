@@ -1,32 +1,29 @@
 """Aba Importar: anexar o extrato (OFX), escolher banco, intervalo e observação, revisar e gravar no Extrato.
 
-O estado da importação em andamento fica em `st.session_state["fin_imp"]`; sem arquivo no seletor, ele é
-descartado (o estado dos widgets também some quando o módulo não é desenhado). Só OFX por enquanto.
+O estado da importação em andamento fica em session_state["fin_imp"] e é descartado quando o seletor fica
+sem arquivo (o estado dos widgets também some quando o módulo não é desenhado). Só OFX por enquanto.
 
-Tela em dois cartões: à esquerda a origem do arquivo (área de soltar que vira o "arquivo verificado" e os chips de
-banco); à direita o intervalo, a observação e o botão Importar, preso na base.
-"""
+A tela tem dois cartões: à esquerda a origem do arquivo (área de soltar, que vira o arquivo verificado, e os
+chips de banco); à direita o intervalo, a observação e o botão Importar, preso na base."""
+
 from datetime import date
 from html import escape
 from pathlib import Path
 
 import streamlit as st
 
-from database import financas_calculos as calc
-from database import financas_importacao as imp
-from database import financas_repo as repo
-from database.ofx_leitor import TAMANHO_MAX, ArquivoInvalido, ler_ofx
+from database.financas import calculos as calc
+from database.financas import importacao as imp
+from database.financas import repo
+from database.financas.ofx_leitor import TAMANHO_MAX, ArquivoInvalido, ler_ofx
 from modules.financas import comum
 from modules.financas.importar import historico, revisao
+from modules.ui import plural
 
 ESTADO = revisao.ESTADO
 CHIPS_MAX = 6  # com mais bancos que isso, a grade mostra CHIPS_MAX - 1 chips e o "Outros"
 _ORIGEM = {"conta": "Extrato de conta", "cartao": "Fatura de cartão"}
 _DATA_MIN, _DATA_MAX = date(2000, 1, 1), date(2100, 12, 31)
-
-
-def _plural(n, singular, plural):
-    return f"{n} {singular if n == 1 else plural}"
 
 
 def _tamanho(n):
@@ -41,10 +38,8 @@ def _data(d):
     return d.strftime("%d/%m/%Y") if d else "—"
 
 
-# ---------- leitura do arquivo ----------
-
 def _carregar(arquivo, bancos):
-    """Lê o arquivo anexado e devolve o estado da importação; erros ficam em `erro` (já pronto para a tela)."""
+    """Lê o arquivo anexado e devolve o estado da importação. Os erros ficam em `erro`, já prontos para a tela."""
     estado = {"id_arquivo": arquivo.file_id, "nome": arquivo.name or "", "tamanho": arquivo.size or 0,
               "extrato": None, "erro": None, "revisao": None}
     sufixo = Path(estado["nome"]).suffix.lower()
@@ -60,8 +55,8 @@ def _carregar(arquivo, bancos):
         except ArquivoInvalido as e:
             estado["erro"] = comum.texto_markdown(str(e))  # a mensagem pode citar texto do arquivo
     extrato = estado["extrato"]
+    # Banco e datas começam pelo que o arquivo diz; os widgets só são criados depois, na coluna ao lado.
     if extrato:
-        # banco e datas começam pelo que o arquivo diz (os widgets são criados depois, na coluna ao lado)
         detectado = imp.banco_detectado(extrato, bancos)
         datas = [t.data for t in extrato.transacoes]
         if detectado:  # banco não reconhecido: fica a escolha que o usuário já fez
@@ -73,11 +68,11 @@ def _carregar(arquivo, bancos):
 
 
 def _processar(arquivo, bancos):
-    """Estado da importação para o arquivo atual do seletor (lê só quando o arquivo muda)."""
+    """Estado da importação para o arquivo atual do seletor; só lê de novo quando o arquivo muda."""
     if arquivo is None:
         st.session_state.pop(ESTADO, None)
-        # o navegador reenvia os valores dos widgets: só atribuir (antes de criá-los) limpa de verdade;
-        # o banco escolhido fica, porque os chips valem também antes de anexar o arquivo
+        # O navegador reenvia os valores dos widgets: só atribuir antes de criá-los limpa de verdade. O banco
+        # escolhido fica, porque os chips valem também antes de anexar o arquivo.
         st.session_state.update({"fin_imp_inicio": None, "fin_imp_fim": None, "fin_imp_obs": ""})
         return None
     estado = st.session_state.get(ESTADO)
@@ -86,10 +81,8 @@ def _processar(arquivo, bancos):
     return estado
 
 
-# ---------- área do arquivo (esquerda) ----------
-
 def _trocar_arquivo():
-    """O seletor só se esvazia com uma chave nova: o nonce na chave faz o papel do X (que fica escondido)."""
+    """O seletor só se esvazia com uma chave nova: o nonce na chave faz o papel do X, que fica escondido."""
     st.session_state["fin_imp_nonce"] = st.session_state.get("fin_imp_nonce", 0) + 1
 
 
@@ -105,7 +98,7 @@ def _zona_arquivo(estado):
             detalhes = [_ORIGEM[extrato.origem]]
             if extrato.inicio and extrato.fim:
                 detalhes.append(f"{_data(extrato.inicio)} a {_data(extrato.fim)}")
-            detalhes.append(_plural(len(extrato.transacoes), "lançamento", "lançamentos"))
+            detalhes.append(plural(len(extrato.transacoes), "lançamento", "lançamentos"))
             nome = estado["nome"]
             comum.md(
                 f'<div class="fin-imp-zona-ok"><div class="fin-imp-zona-ico">{comum.icone("task")}'
@@ -117,14 +110,12 @@ def _zona_arquivo(estado):
         st.button("Remover arquivo", icon=":material/delete:", on_click=_trocar_arquivo, key="fin_imp_remover")
 
 
-# ---------- chips de banco ----------
-
 def _escolher_banco(banco_id):
     st.session_state["fin_imp_banco"] = banco_id
 
 
 def _banco_ativo(bancos):
-    """Banco marcado; se ele foi excluído ou desativado enquanto estava marcado, a escolha some."""
+    """Banco marcado. Se foi excluído ou desativado enquanto estava marcado, a escolha some."""
     atual = st.session_state.get("fin_imp_banco")
     if atual not in {b["id"] for b in bancos}:
         atual = st.session_state["fin_imp_banco"] = None
@@ -132,7 +123,7 @@ def _banco_ativo(bancos):
 
 
 def _divisao(bancos, ativo):
-    """(chips da grade, bancos que vão para "Outros"); o banco marcado nunca fica escondido."""
+    """Devolve (chips da grade, bancos que vão para "Outros"). O banco marcado nunca fica escondido."""
     if len(bancos) <= CHIPS_MAX:
         return bancos, []
     visiveis = bancos[:CHIPS_MAX - 1]
@@ -142,7 +133,7 @@ def _divisao(bancos, ativo):
 
 
 def _chip(corpo_html, classe, chave, rotulo, **botao):
-    """O visual é HTML (o mesmo selo dos bancos no resto do módulo); um botão invisível por cima recebe o clique."""
+    """O visual é HTML, o mesmo selo dos bancos no resto do módulo; um botão invisível por cima recebe o clique."""
     with st.container(key=f"fin_imp_bk_{chave}"):
         comum.md(f'<div class="fin-imp-chip{classe}">{corpo_html}</div>')
         return st.button(rotulo, key=f"fin_imp_bkb_{chave}", **botao)
@@ -161,7 +152,8 @@ def _chip_banco(banco, ativo, na_janela=False):
     marca = f'<i class="fin-imp-chk">{comum.icone("check")}</i>' if ativo else ""
     extra = {} if na_janela else {"on_click": _escolher_banco, "args": (banco["id"],)}
     clicou = _chip(selo + marca, " ativo" if ativo else "", banco["id"], banco["nome"], **extra)
-    if clicou and na_janela:  # dentro da janela: grava e fecha com um rerun da página toda
+    # Dentro da janela, grava e fecha com um rerun da página toda.
+    if clicou and na_janela:
         _escolher_banco(banco["id"])
         _fechar_outros()
         st.rerun()
@@ -175,7 +167,7 @@ def _dialogo_outros(restantes, ativo):
 
 
 def _bancos(estado, bancos):
-    """Grade de chips de seleção única. Devolve o id do banco marcado (ou None)."""
+    """Grade de chips de seleção única. Devolve o id do banco marcado, ou None."""
     comum.cabecalho_cartao("Selecione o banco", "account_balance")
     ativo = _banco_ativo(bancos)
     if not bancos:
@@ -200,10 +192,8 @@ def _bancos(estado, bancos):
     return ativo
 
 
-# ---------- intervalo, observação e botão (direita) ----------
-
 def _opcoes(estado, banco_id):
-    """Intervalo, observação e o botão Importar. Devolve (clicou, assinatura) para a revisão."""
+    """Intervalo, observação e botão Importar. Devolve (clicou, assinatura) para a revisão."""
     pronto = bool(estado and estado["extrato"])
     extrato = estado["extrato"] if pronto else None
 
@@ -233,10 +223,10 @@ def _opcoes(estado, banco_id):
         if n == 0:
             motivo = "Nenhum lançamento neste intervalo."
         else:
-            avisos.append(_plural(n, "lançamento", "lançamentos") + " neste intervalo.")
+            avisos.append(plural(n, "lançamento", "lançamentos") + " neste intervalo.")
         if extrato.inicio and extrato.fim and (inicio < extrato.inicio or fim > extrato.fim):
             avisos.append(f"O arquivo cobre de {_data(extrato.inicio)} a {_data(extrato.fim)}.")
-    # o botão fica preso na base do cartão (CSS) e só libera com arquivo, banco e datas válidos
+    # O botão fica preso na base do cartão (CSS) e só libera com arquivo, banco e datas válidos.
     with st.container(key="fin_imp_cta"):
         for aviso in avisos:
             st.caption(aviso)
@@ -248,10 +238,8 @@ def _opcoes(estado, banco_id):
     return clicou, assinatura
 
 
-# ---------- aba ----------
-
 def _concluir():
-    """Depois de gravar: o seletor ganha uma chave nova (volta vazio), o banco é desmarcado e a tela se atualiza."""
+    """Depois de gravar: o seletor ganha uma chave nova e volta vazio, o banco é desmarcado e a tela se atualiza."""
     st.session_state.pop(ESTADO, None)
     st.session_state["fin_imp_banco"] = None
     st.session_state["fin_imp_nonce"] = st.session_state.get("fin_imp_nonce", 0) + 1
@@ -273,7 +261,8 @@ def render(mes):
     with direita, st.container(key="fin_card_imp_opcoes"):
         clicou, assinatura = _opcoes(estado, banco_id)
     if estado and estado["revisao"] and estado["revisao"]["assinatura"] != assinatura:
-        estado["revisao"] = None  # mudou arquivo, banco ou intervalo: a revisão não vale mais
+        # Mudou o arquivo, o banco ou o intervalo: a revisão não vale mais.
+        estado["revisao"] = None
     if clicou:
         estado["revisao"] = revisao.construir(estado, assinatura)
     if estado and estado["revisao"]:

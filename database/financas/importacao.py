@@ -1,22 +1,16 @@
-"""Regras puras da importação de extratos: limpeza, linhas ignoradas, IOF, duplicidade e detecção do banco.
-
-Sem banco de dados nem Streamlit: recebe os dados do leitor OFX (`ofx_leitor`) e devolve dados prontos para a
-revisão. A sugestão de categoria fica em `financas_sugestoes.py`.
-"""
 import hashlib
 import re
-import unicodedata
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Sequence
 
-from database.financas_calculos import DESCRICAO_MAX, OBSERVACAO_MAX, fmt_brl
-from database.ofx_leitor import ExtratoOfx, TransacaoOfx
+from database.dinheiro import ZERO, fmt_brl
+from database.financas.calculos import DESCRICAO_MAX, OBSERVACAO_MAX
+from database.financas.ofx_leitor import ExtratoOfx, TransacaoOfx
+from database.texto import normalizar
 
-ZERO = Decimal("0")
-
-# código do banco no OFX (<FID> ou <BANKID>) -> nome do banco padrão
+# Código do banco no OFX (<FID> ou <BANKID>) para o nome do banco padrão.
 BANCOS_OFX = {"260": "Nubank", "756": "Sicoob", "380": "PicPay", "104": "Caixa"}
 
 _PREFIXO_ADQUIRENTE = re.compile(r"^(?:dm|ebn|pg|mp|pp|ifd|ec)\s?\*\s*", re.I)
@@ -24,16 +18,8 @@ _CODIGO_FINAL = re.compile(r"\s+(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-
 _NOME_ENTRE_ASPAS = re.compile(r"[\"“”]([^\"“”]+)[\"“”]")
 
 
-def normalizar(texto: str) -> str:
-    """Minúsculas, sem acento e com espaços colapsados: base de toda comparação de texto."""
-    sem_acento = "".join(c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c))
-    return " ".join(sem_acento.lower().split())
-
-
-# ---------- texto da linha ----------
-
 def limpar_descricao(texto: str) -> str:
-    """Tira prefixo de adquirente (Dm*, Ebn*...) e código solto no fim; corta em DESCRICAO_MAX; nunca devolve vazio."""
+    """Tira o prefixo de adquirente (Dm*, Ebn*) e o código solto no fim, mas nunca devolve vazio."""
     original = " ".join((texto or "").split())
     limpo = _PREFIXO_ADQUIRENTE.sub("", original)
     limpo = _CODIGO_FINAL.sub("", limpo).strip()
@@ -47,7 +33,8 @@ def forma_da_linha(origem: str, texto: str) -> str:
 
 
 def motivo_ignorada(origem: str, entrada: bool, texto: str, meu_nome: str) -> str:
-    """Motivo pelo qual a linha vem desmarcada por padrão; "" se ela deve ser importada."""
+    """Por que a linha vem desmarcada, ou "" se deve ser importada: pagamento de fatura, quitação da fatura
+    anterior ou Pix entre contas do próprio usuário."""
     norm = normalizar(texto)
     if origem == "conta" and "pagamento de fatura" in norm:
         return "Pagamento de fatura"
@@ -59,17 +46,14 @@ def motivo_ignorada(origem: str, entrada: bool, texto: str, meu_nome: str) -> st
     return ""
 
 
-# ---------- IOF ----------
-
 @dataclass(frozen=True)
 class Compra:
     principal: TransacaoOfx
-    valor: Decimal  # positivo: compra + IOF
-    iof: Decimal  # parte do valor que é IOF somado (0 se não houve)
+    valor: Decimal  # positivo: compra mais IOF
+    iof: Decimal  # parte do valor que é IOF (0 se não houve)
 
 
 def _nome_do_iof(t: TransacaoOfx):
-    """Nome entre aspas de uma linha 'IOF de "X"'; None se a linha não é um IOF desse tipo."""
     if t.valor >= 0 or not normalizar(t.texto).startswith("iof de"):
         return None
     achado = _NOME_ENTRE_ASPAS.search(t.texto)
@@ -77,10 +61,11 @@ def _nome_do_iof(t: TransacaoOfx):
 
 
 def fundir_iof(transacoes: Sequence[TransacaoOfx]) -> list:
-    """Soma cada linha de IOF à compra a que pertence (mesmo FITID; senão mesma data e nome entre aspas)."""
+    """No cartão o IOF vem como linha própria. Ela soma na compra de mesmo FITID ou, sem FITID, de mesma data e
+    nome entre aspas."""
     lista = list(transacoes)
     iofs = {i: nome for i, t in enumerate(lista) if (nome := _nome_do_iof(t)) is not None}
-    pai = {}  # índice do IOF -> índice da compra
+    pai = {}
     for i, nome in iofs.items():
         candidatos = [j for j, c in enumerate(lista) if j not in iofs and c.valor < 0]
         por_fitid = [j for j in candidatos if lista[i].fitid and lista[j].fitid == lista[i].fitid]
@@ -100,16 +85,14 @@ def fundir_iof(transacoes: Sequence[TransacaoOfx]) -> list:
     return compras
 
 
-# ---------- duplicidade ----------
-
 def chave_externa(t: TransacaoOfx) -> str:
-    """Identifica a linha do banco: o FITID sozinho não serve (o IOF repete o FITID da compra)."""
+    """Identifica a linha do banco. O FITID sozinho não serve: o IOF repete o FITID da compra."""
     base = f"{t.fitid}|{t.data.isoformat()}|{format(t.valor, 'f')}|{normalizar(t.texto)}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
 def marcar_duplicados(chaves: Sequence[str], existentes: Counter) -> list:
-    """True para as chaves que já existem, contando por quantidade (dois iguais no arquivo e um no banco: um só)."""
+    """Marca por quantidade: dois lançamentos iguais no arquivo e um no banco marcam só um."""
     restante = Counter(existentes)
     marcas = []
     for chave in chaves:
@@ -121,10 +104,7 @@ def marcar_duplicados(chaves: Sequence[str], existentes: Counter) -> list:
     return marcas
 
 
-# ---------- recorte, observação e banco ----------
-
 def recortar(transacoes, inicio, fim) -> list:
-    """Linhas com data entre `inicio` e `fim`, inclusive nas duas pontas."""
     return [t for t in transacoes if inicio <= t.data <= fim]
 
 
@@ -136,7 +116,7 @@ def observacao_lancamento(texto_original: str, iof: Decimal) -> str:
 
 
 def banco_detectado(extrato: ExtratoOfx, bancos: Sequence[dict]):
-    """O banco cadastrado que corresponde ao código do OFX (pelo nome), ou None (não reconhecido ou renomeado)."""
+    """Banco cadastrado que bate com o código do OFX; None se o código é desconhecido ou o banco foi renomeado."""
     nome = BANCOS_OFX.get(extrato.codigo_banco)
     if nome is None:
         return None

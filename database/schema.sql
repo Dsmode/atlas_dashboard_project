@@ -1,7 +1,3 @@
-CREATE DATABASE IF NOT EXISTS atlas_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE atlas_db;
-
 CREATE TABLE IF NOT EXISTS metas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     titulo VARCHAR(150) NOT NULL,
@@ -45,7 +41,7 @@ CREATE TABLE IF NOT EXISTS metas_categorias (
     FOREIGN KEY (categoria_id) REFERENCES categorias_meta (id) ON DELETE CASCADE
 );
 
--- Controle Financeiro: tabelas próprias, sem ligação com as Metas Pessoais
+-- Controle Financeiro: tabelas fin_*, sem ligação com as Metas Pessoais
 
 CREATE TABLE IF NOT EXISTS fin_categorias (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -64,7 +60,7 @@ CREATE TABLE IF NOT EXISTS fin_bancos (
     ativo TINYINT(1) NOT NULL DEFAULT 1
 );
 
--- Importação de extratos (OFX): histórico de cada importação e regras aprendidas na revisão
+-- Importação de extratos (OFX): histórico das importações e regras aprendidas na revisão
 
 CREATE TABLE IF NOT EXISTS fin_importacoes (
     id INT AUTO_INCREMENT PRIMARY KEY,

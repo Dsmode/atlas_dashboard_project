@@ -1,22 +1,20 @@
 """Diálogos do Extrato: editar, excluir e copiar os gastos fixos do mês anterior.
 
-Os diálogos do Streamlit reexecutam só a própria função: o estado inicial é montado em `abrir_*`, antes de
-abrir, e o nonce na chave dos campos garante que cada abertura comece do zero.
-"""
+Um diálogo do Streamlit reexecuta só a própria função. Por isso o estado inicial é montado em `abrir_*`,
+antes de abrir, e o nonce na chave dos campos faz cada abertura começar do zero."""
+
 import streamlit as st
 
-from database import financas_calculos as calc
-from database import financas_repo as repo
+from database.financas import calculos as calc
+from database.financas import repo
 from modules.financas import comum
 from modules.financas.extrato import formulario
 
 
-def _plural(n, texto):
-    """'gasto fixo copiado' → 'gastos fixos copiados' quando n > 1."""
+def _pluralizar(n, texto):
+    """'gasto fixo copiado' vira 'gastos fixos copiados' quando n > 1."""
     return texto if n == 1 else " ".join(p + "s" for p in texto.split())
 
-
-# ---------- editar e excluir ----------
 
 def abrir_edicao(lancamento):
     n = st.session_state.get("fin_ext_edit_n", 0) + 1
@@ -30,7 +28,7 @@ def _dialogo_edicao():
     estado = st.session_state.fin_ext_edicao
     lancamento, n = estado["lancamento"], estado["nonce"]
     categorias = repo.listar_categorias()
-    # banco oculto só aparece se for o do próprio lançamento (os antigos continuam mostrando o banco)
+    # Banco oculto só aparece se for o do próprio lançamento.
     bancos = [b for b in repo.listar_bancos(incluir_ocultos=True) if b["ativo"] or b["id"] == lancamento["banco_id"]]
 
     dados, categoria = formulario.campos(f"fin_edt_{n}", lancamento, categorias, bancos)
@@ -72,8 +70,6 @@ def dialogo_exclusao(lancamento):
         comum.avisar("Lançamento excluído.")
         st.rerun()
 
-
-# ---------- copiar gastos fixos do mês anterior ----------
 
 def abrir_copia(mes):
     anterior = calc.somar_meses(mes, -1)
@@ -134,5 +130,5 @@ def _dialogo_copia():
         ])
         if not gravou:
             return
-        comum.avisar(f"{copiados} {_plural(copiados, 'gasto fixo copiado')} para {calc.nome_mes(mes)}.")
+        comum.avisar(f"{copiados} {_pluralizar(copiados, 'gasto fixo copiado')} para {calc.nome_mes(mes)}.")
         st.rerun()

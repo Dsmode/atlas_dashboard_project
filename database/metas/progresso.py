@@ -1,16 +1,12 @@
-"""Regra de progresso das Metas Pessoais (tarefas, quantidade e valor em R$).
+"""Regra de progresso das Metas Pessoais (tarefas, quantidade e valor em R$), sem Streamlit nem banco.
+Quantidade e valor usam Decimal; quantidade guarda sempre inteiros."""
 
-Módulo puro: sem Streamlit e sem banco, para ser usado pelo repositório, pela importação e pelas telas.
-Valores monetários e de quantidade são `Decimal` (quantidade guarda sempre inteiros).
-"""
-from datetime import date
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+
+from database.dinheiro import CENTAVO, VALOR_MAX, fmt_brl
 
 TIPOS = ("tarefas", "quantidade", "valor")
 OBJETIVOS = ("aumentar", "reduzir")
-LIMITE = Decimal("999999999999.99")  # cabe em DECIMAL(14,2)
-
-_CENTAVO = Decimal("0.01")
 
 
 def _numero(valor):
@@ -18,10 +14,10 @@ def _numero(valor):
 
 
 def progresso(meta, tarefas):
-    """Estado do progresso da meta: dict com `atual`, `alvo`, `pct` (inteiro de 0 a 100) e `atingida`.
+    """Estado da meta: atual, alvo, pct (inteiro de 0 a 100) e atingida.
 
-    Aumentar parte de zero (quem já tem R$ 500 de R$ 5.000 está em 10%); reduzir mede o caminho da partida
-    até o alvo. O percentual só chega a 100 quando a meta é de fato atingida."""
+    Aumentar parte do zero (R$ 500 de R$ 5.000 é 10%); reduzir mede o caminho da partida até o alvo. O pct
+    só chega a 100 quando a meta é de fato atingida."""
     if meta["tipo_progresso"] == "tarefas":
         total = len(tarefas)
         atual = sum(1 for t in tarefas if t["concluida"])
@@ -42,20 +38,11 @@ def progresso(meta, tarefas):
     return {"atual": atual, "alvo": alvo, "pct": pct, "atingida": atingida}
 
 
-def fmt_brl(valor):
-    """R$ 1.200,00 (negativo: -R$ 50,00)."""
-    valor = Decimal(valor).quantize(_CENTAVO)
-    texto = f"{abs(valor):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-    return f"{'-' if valor < 0 else ''}R$ {texto}"
-
-
 def fmt_qtd(valor):
-    """Quantidade inteira, com ponto de milhar."""
     return f"{int(valor):,}".replace(",", ".")
 
 
 def validar(tipo, objetivo, alvo, inicial, atual):
-    """Mensagem de erro (em português) para os dados de progresso, ou None se estiverem corretos."""
     if tipo == "tarefas":
         return None
     if alvo is None or alvo <= 0:
@@ -68,16 +55,15 @@ def validar(tipo, objetivo, alvo, inicial, atual):
             return "Quantidade não pode ser negativa."
     if objetivo == "reduzir" and (inicial is None or inicial <= alvo):
         return "Em uma meta de redução, o valor de partida deve ser maior que o alvo."
-    if any(abs(v) > LIMITE for v in valores):
+    if any(abs(v) > VALOR_MAX for v in valores):
         return "Valor grande demais."
     return None
 
 
 def ritmo(meta, hoje):
-    """Quanto falta e o ritmo necessário até o prazo; None quando não se aplica.
-
-    Só para metas ativas de quantidade/valor, com prazo e ainda não atingidas. Até 14 dias o ritmo é por
-    dia, até 90 por semana, acima disso por mês."""
+    """Quanto falta e o ritmo necessário até o prazo, ou None quando não se aplica: só metas ativas de
+    quantidade ou valor, com prazo e ainda não atingidas. Até 14 dias o ritmo é por dia, até 90 por semana
+    e acima disso por mês."""
     if meta["tipo_progresso"] == "tarefas" or meta["status"] != "ativa" or not meta["prazo"]:
         return None
     p = progresso(meta, [])
@@ -99,7 +85,7 @@ def ritmo(meta, hoje):
         periodos, nome = -(-dias // 30), "mês"
     por_periodo = faltam / periodos
     if monetario:
-        por_periodo = fmt_brl(por_periodo.quantize(_CENTAVO, rounding=ROUND_CEILING))
+        por_periodo = fmt_brl(por_periodo.quantize(CENTAVO, rounding=ROUND_CEILING))
     else:
         por_periodo = fmt_qtd(por_periodo.to_integral_value(rounding=ROUND_CEILING))
     return f"Faltam {texto} · cerca de {por_periodo} por {nome}"

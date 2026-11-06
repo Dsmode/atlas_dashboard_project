@@ -1,18 +1,19 @@
-"""Aba Dashboard: linha de resumo do mês e os quatro gráficos (grade 2 × 2)."""
 from decimal import Decimal
 from html import escape
 
 import streamlit as st
 
-from database import financas_calculos as calc
-from database import financas_repo as repo
+from database.cores import COR_NEUTRA, cor_valida
+from database.dinheiro import ZERO, fmt_brl
+from database.financas import calculos as calc
+from database.financas import repo
 from modules.financas import comum, graficos
 
-MESES_COLUNAS = 6  # Entradas × Saídas: mês ativo e os 5 anteriores
-MESES_FLUXO = 12  # Fluxo de caixa: últimos 12 meses até o mês ativo
+MESES_COLUNAS = 6  # Entradas × Saídas: o mês ativo e os 5 anteriores
+MESES_FLUXO = 12  # Fluxo de caixa: os últimos 12 meses até o mês ativo
 TOP = 5
 
-_VISOES = ("Categoria", "Tipo")  # agrupamento da rosca; Tipo = fixos × variáveis
+_VISOES = ("Categoria", "Tipo")  # agrupamento da rosca; Tipo é fixos × variáveis
 _VISAO_SALVA = "fin_dash_visao_salva"  # o estado do widget some ao trocar de módulo
 
 
@@ -21,20 +22,16 @@ def _classe_sinal(valor):
 
 
 def _legenda(itens):
-    """Itens (cor, rótulo, valor em HTML) no mesmo visual da legenda do Início."""
     return '<div class="chart-legend fin-dash-legenda">' + "".join(
-        f'<span class="legenda-item"><i style="background:{comum.cor(c)}"></i>{rotulo} <b>{valor}</b></span>'
+        f'<span class="legenda-item"><i style="background:{cor_valida(c)}"></i>{rotulo} <b>{valor}</b></span>'
         for c, rotulo, valor in itens
     ) + "</div>"
 
 
 def _vazio(cartao, texto):
-    """Estado vazio com a altura do gráfico, para os cartões da mesma linha continuarem alinhados."""
     with st.container(key=f"fin_dash_vazio_{cartao}"):
         comum.vazio(texto)
 
-
-# ---------- linha fina de resumo ----------
 
 def _item_resumo(classe, icone_nome, rotulo, valor, rodape=""):
     return (
@@ -45,9 +42,9 @@ def _item_resumo(classe, icone_nome, rotulo, valor, rodape=""):
 
 
 def _resumo(resumo):
-    """Faixa de vidro única: Entradas, Saídas, Saldo do mês e quanto da renda foi gasto."""
     pct = resumo["pct_gasto"]
-    if pct is None:  # sem entrada no mês não há renda para comparar
+    # Sem entrada no mês não há renda para comparar.
+    if pct is None:
         valor_pct, barra, classe_pct = "—", '<span class="fin-resumo-barra vazia"><i></i></span>', "sem-renda"
     else:
         largura = min(float(pct), 100.0)
@@ -56,30 +53,28 @@ def _resumo(resumo):
         barra = f'<span class="fin-resumo-barra"><i style="width:{largura:.1f}%"></i></span>'
     saldo = resumo["saldo"]
     itens = (
-        _item_resumo("entrada", "south_west", "Entradas", calc.fmt_brl(resumo["entradas"]))
-        + _item_resumo("saida", "north_east", "Saídas", calc.fmt_brl(resumo["saidas"]))
+        _item_resumo("entrada", "south_west", "Entradas", fmt_brl(resumo["entradas"]))
+        + _item_resumo("saida", "north_east", "Saídas", fmt_brl(resumo["saidas"]))
         + _item_resumo(f"saldo {_classe_sinal(saldo)}", "account_balance_wallet", "Saldo do mês",
-                       calc.fmt_brl(saldo, sinal=True))
+                       fmt_brl(saldo, sinal=True))
         + _item_resumo(f"pct {classe_pct}", "donut_small", "Da renda gasta", valor_pct, barra)
     )
     comum.md(f'<div class="fin-resumo">{itens}</div>')
 
 
-# ---------- cartões ----------
-
 def _cartao_entradas_saidas(totais, mes):
     linhas = calc.entradas_saidas(totais, calc.meses_ate(mes, MESES_COLUNAS))
     with st.container(key="fin_card_dash_es"):
         comum.cabecalho_cartao("Entradas × Saídas", "bar_chart", f"Últimos {MESES_COLUNAS} meses")
-        entradas = sum((l["entradas"] for l in linhas), calc.ZERO)
-        saidas = sum((l["saidas"] for l in linhas), calc.ZERO)
+        entradas = sum((linha["entradas"] for linha in linhas), ZERO)
+        saidas = sum((linha["saidas"] for linha in linhas), ZERO)
         if not entradas and not saidas:
             _vazio("es", f"Nenhum lançamento nos últimos {MESES_COLUNAS} meses.")
             return
         comum.md(_legenda([
-            (comum.COR_ENTRADA, "Entradas", calc.fmt_brl(entradas)),
-            (comum.COR_SAIDA, "Saídas", calc.fmt_brl(saidas)),
-            (comum.COR_DESTAQUE, "Saldo", calc.fmt_brl(entradas - saidas, sinal=True)),
+            (comum.COR_ENTRADA, "Entradas", fmt_brl(entradas)),
+            (comum.COR_SAIDA, "Saídas", fmt_brl(saidas)),
+            (comum.COR_DESTAQUE, "Saldo", fmt_brl(entradas - saidas, sinal=True)),
         ]))
         st.altair_chart(graficos.entradas_saidas(linhas), width="stretch", theme=None)
 
@@ -89,11 +84,10 @@ def _guardar_visao():
 
 
 def _legenda_rosca(grupos):
-    """Nome, percentual e valor de cada fatia (os grupos zerados também aparecem, apagados)."""
     linhas = "".join(
-        f'<div class="fin-rosca-item{" zerado" if not g["valor"] else ""}" style="--cat:{comum.cor(g["cor"])}">'
+        f'<div class="fin-rosca-item{" zerado" if not g["valor"] else ""}" style="--cat:{cor_valida(g["cor"])}">'
         f'<i></i><span class="fin-rosca-nome">{escape(g["nome"])}</span>'
-        f'<span class="fin-rosca-pct">{calc.fmt_pct(g["pct"])}</span><b>{calc.fmt_brl(g["valor"])}</b></div>'
+        f'<span class="fin-rosca-pct">{calc.fmt_pct(g["pct"])}</span><b>{fmt_brl(g["valor"])}</b></div>'
         for g in grupos
     )
     return f'<div class="fin-rosca-legenda">{linhas}</div>'
@@ -130,11 +124,11 @@ def _cartao_fluxo(saldo_inicial, totais, mes):
         linhas = calc.fluxo_caixa(saldo_inicial, totais, meses)
         atual = linhas[-1]["saldo"]
         itens = [
-            (comum.COR_NEUTRA, "Saldo inicial", calc.fmt_brl(saldo_inicial)),
+            (COR_NEUTRA, "Saldo inicial", fmt_brl(saldo_inicial)),
             (comum.COR_SAIDA if atual < 0 else comum.COR_DESTAQUE, f"Saldo em {calc.mes_curto(mes, com_ano=True)}",
-             calc.fmt_brl(atual)),
+             fmt_brl(atual)),
         ]
-        if any(l["saldo"] < 0 for l in linhas):
+        if any(linha["saldo"] < 0 for linha in linhas):
             itens.append((comum.COR_SAIDA, "Mês no vermelho", ""))
         comum.md(_legenda(itens))
         st.altair_chart(graficos.fluxo_caixa(linhas), width="stretch", theme=None)
@@ -150,8 +144,9 @@ def _cartao_top(lancamentos, mes):
         top = todas[:TOP]
         qtd = len(todas)
         itens = [(comum.COR_DESTAQUE, f"{qtd} {'categoria' if qtd == 1 else 'categorias'} com gasto", "")]
-        if qtd > TOP:  # com até 5 categorias o ranking já é tudo; acima disso, quanto o top concentra
-            soma_pct = min(sum((g["pct"] for g in top), calc.ZERO), Decimal(100))
+        # Com até 5 categorias o ranking já mostra tudo; acima disso, mostra quanto o top concentra.
+        if qtd > TOP:
+            soma_pct = min(sum((g["pct"] for g in top), ZERO), Decimal(100))
             itens.append((comum.COR_DESTAQUE, f"As {TOP} maiores somam", calc.fmt_pct(soma_pct)))
         comum.md(_legenda(itens))
         st.altair_chart(graficos.top_categorias(top), width="stretch", theme=None)
@@ -166,7 +161,7 @@ def render(mes):
 
     with st.container(key="fin_dash"):
         _resumo(resumo)
-        # ↖ Entradas × Saídas  ↗ Para onde vai o dinheiro  ↙ Fluxo de caixa  ↘ Top 5 (a grade segue a ordem)
+        # A grade segue esta ordem: Entradas × Saídas, Para onde vai o dinheiro, Fluxo de caixa e Top 5.
         with st.container(key="fin_dash_grade"):
             _cartao_entradas_saidas(totais, mes)
             _cartao_rosca(lancamentos, resumo["saidas"])

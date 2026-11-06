@@ -1,10 +1,9 @@
-"""Categorias e bancos com que o Controle Financeiro começa."""
+from database.cores import COR_NEUTRA
 
-# "Outros" existe em cada tipo, recebe os lançamentos das categorias excluídas e não pode ser excluída
+# Existe uma "Outros" em cada tipo: recebe os lançamentos das categorias excluídas e não pode ser excluída.
 NOME_OUTROS = "Outros"
-COR_OUTROS = "#8d8d9c"
+COR_OUTROS = COR_NEUTRA
 
-# (nome, cor); a última de cada lista é a "Outros"
 CATEGORIAS_GASTO = [
     ("Casa", "#4dd2a0"),
     ("Alimentação", "#ff6b7a"),
@@ -25,7 +24,7 @@ CATEGORIAS_ENTRADA = [
     ("Presente", "#ff7ad9"),
     (NOME_OUTROS, COR_OUTROS),
 ]
-# (nome, sigla, cor): a sigla colorida faz o papel da logo
+# (nome, sigla, cor): a sigla colorida faz o papel da logo.
 BANCOS = [
     ("Nubank", "Nu", "#8a2be2"),
     ("Sicoob", "Sc", "#00a091"),
@@ -35,7 +34,7 @@ BANCOS = [
 
 
 def criar_padroes(cur):
-    """Grava os padrões uma única vez: depois disso, renomear ou excluir não os traz de volta."""
+    """Grava os padrões uma única vez; depois disso, renomear ou excluir um deles não o traz de volta."""
     cur.execute("SELECT 1 FROM fin_config WHERE chave = 'padroes_criados'")
     if cur.fetchone():
         return

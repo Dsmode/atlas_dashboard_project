@@ -1,18 +1,21 @@
-"""Diálogo da engrenagem: categorias, bancos e saldo inicial.
+"""Diálogo da engrenagem: categorias, bancos, regras e dados gerais.
 
-O catálogo grava na hora (como o de categorias das Metas); o estado do diálogo (seção, item em edição,
-aviso) fica em session_state["fin_cfg"], montado em `abrir()` antes de o diálogo existir. Fechar reexecuta
-a página para o Extrato e o Dashboard refletirem as mudanças.
-"""
+O catálogo grava na hora. O estado do diálogo (seção, item em edição, aviso) fica em
+session_state["fin_cfg"], montado em `abrir()` antes de o diálogo existir. Ao fechar, a página roda de novo
+para o Extrato e o Dashboard refletirem as mudanças."""
+
 from html import escape
 
 import streamlit as st
 from streamlit.errors import StreamlitInvalidLayoutContextError
 
-from database import financas_calculos as calc
-from database import financas_repo as repo
-from database.financas_importacao import normalizar
+from database.cores import COR_PADRAO, cor_valida
+from database.dinheiro import VALOR_MAX, fmt_brl
+from database.financas import calculos as calc
+from database.financas import repo
+from database.texto import normalizar
 from modules.financas import comum
+from modules.ui import secao
 
 SECOES = {"categorias": "Categorias", "bancos": "Bancos", "regras": "Regras", "geral": "Geral"}
 TIPOS_CATEGORIA = {"gasto": "Gastos", "entrada": "Entradas"}
@@ -26,14 +29,13 @@ def _uso(n):
 
 
 def _mudar(cfg, modo=None, aviso=None):
-    """Troca o item em edição/exclusão e reexecuta só o diálogo."""
     cfg["modo"] = modo
     if aviso:
         cfg["aviso"] = aviso
     try:
         st.rerun(scope="fragment")
+    # Fora de uma reexecução de fragmento, como no AppTest, que sempre roda o script inteiro.
     except StreamlitInvalidLayoutContextError:
-        # fora de uma reexecução do diálogo (ex.: AppTest, que sempre roda o script inteiro)
         st.rerun()
 
 
@@ -44,7 +46,7 @@ def _aviso(cfg):
 
 
 def _confirmacao(cfg, chave, nome, texto, excluir):
-    """Caixa de confirmação logo abaixo do item: aviso + Cancelar/Excluir. `excluir()` devolve o aviso."""
+    """Caixa de confirmação logo abaixo do item. `excluir()` faz a exclusão e devolve o aviso."""
     n = cfg["nonce"]
     with st.container(key=f"fin_cfg_conf_{n}_{chave}"):
         comum.md(f'<div class="fin-cfg-alerta">{comum.icone("warning")}<span>Excluir <b>{escape(nome)}</b>? '
@@ -57,7 +59,6 @@ def _confirmacao(cfg, chave, nome, texto, excluir):
 
 
 def _botoes_item(cfg, chave, visivel=None, excluir=True, editar=True):
-    """Grupo de ações do item: editar, ocultar/mostrar (bancos) e excluir."""
     n = cfg["nonce"]
     clicado = None
     with st.container(horizontal=True, gap="xsmall", width="content", key=f"fin_cfg_acoes_{n}_{chave}"):
@@ -73,15 +74,19 @@ def _botoes_item(cfg, chave, visivel=None, excluir=True, editar=True):
     return clicado
 
 
+def _linha_item(cfg, prefixo, item_id, html, **botoes):
+    with st.container(horizontal=True, vertical_alignment="center", gap="small",
+                      key=f"fin_cfg_lin_{prefixo}_{cfg['nonce']}_{item_id}"):
+        comum.md(html, width="stretch")
+        return _botoes_item(cfg, f"{prefixo}{item_id}", **botoes)
+
+
 def _salvar_cancelar(cfg, sufixo):
-    """Cancelar / Salvar do formulário em linha; devolve True se clicou em Salvar."""
     cancelar, salvar = st.columns(2)
     if cancelar.button("Cancelar", width="stretch", key=f"fin_cfg_fno_{sufixo}"):
         _mudar(cfg)
     return salvar.button("Salvar", type="primary", width="stretch", key=f"fin_cfg_fsim_{sufixo}")
 
-
-# ---------- categorias ----------
 
 def _form_categoria(cfg, tipo, categoria=None):
     sufixo = f"{cfg['nonce']}_{categoria['id'] if categoria else 'nova_' + tipo}"
@@ -92,7 +97,7 @@ def _form_categoria(cfg, tipo, categoria=None):
             key=f"fin_cfg_in_nome_{sufixo}",
         ).strip()
         cor = col_cor.color_picker(
-            "Cor", value=comum.cor(categoria["cor"]) if categoria else comum.COR_PADRAO, key=f"fin_cfg_in_cor_{sufixo}",
+            "Cor", value=cor_valida(categoria["cor"]) if categoria else COR_PADRAO, key=f"fin_cfg_in_cor_{sufixo}",
         )
         if not _salvar_cancelar(cfg, sufixo):
             return
@@ -101,14 +106,52 @@ def _form_categoria(cfg, tipo, categoria=None):
             return
         try:
             if categoria:
-                repo.atualizar_categoria(categoria["id"], nome, comum.cor(cor))
+                repo.atualizar_categoria(categoria["id"], nome, cor_valida(cor))
             else:
-                repo.criar_categoria(tipo, nome, comum.cor(cor))
+                repo.criar_categoria(tipo, nome, cor_valida(cor))
         except repo.NomeDuplicado:
             st.error(f"Já existe uma categoria de {tipo} chamada “{comum.texto_markdown(nome)}” "
                      "(maiúsculas e acentos não contam).")
             return
         _mudar(cfg, aviso="Categoria salva." if categoria else f"Categoria “{nome}” criada.")
+
+
+def _confirmar_exclusao_categoria(cfg, c, nome_outros):
+    em_uso = c["em_uso"]
+    texto = ("Nenhum lançamento usa esta categoria." if em_uso == 0 else
+             f"1 lançamento irá para {nome_outros}." if em_uso == 1 else
+             f"{em_uso} lançamentos irão para {nome_outros}.")
+
+    def excluir():
+        movidos = repo.excluir_categoria(c["id"])
+        if not movidos:
+            return "Categoria excluída."
+        return f"Categoria excluída. {_uso(movidos)} movido{'s' if movidos > 1 else ''} para {nome_outros}."
+
+    _confirmacao(cfg, f"c{c['id']}", c["nome"], texto, excluir)
+
+
+def _item_categoria(cfg, c, tipo, nome_outros):
+    modo = cfg["modo"]
+    if modo == ("cat_editar", c["id"]):
+        _form_categoria(cfg, tipo, c)
+        return
+    cadeado = comum.icone("lock", "fin-cfg-cadeado") if c["protegida"] else ""
+    dica = f' title="{_DICA_OUTROS}"' if c["protegida"] else ""
+    clicado = _linha_item(
+        cfg, "c", c["id"],
+        f'<div class="fin-cfg-item"{dica}>'
+        f'<span class="fin-cfg-ponto" style="--cor:{cor_valida(c["cor"])}"></span>'
+        f'<span class="fin-cfg-nome">{escape(c["nome"])}</span>{cadeado}'
+        f'<span class="fin-cfg-uso">{_uso(c["em_uso"])}</span></div>',
+        excluir=not c["protegida"],
+    )
+    if clicado == "editar":
+        _mudar(cfg, ("cat_editar", c["id"]))
+    if clicado == "excluir":
+        _mudar(cfg, ("cat_excluir", c["id"]))
+    if modo == ("cat_excluir", c["id"]):
+        _confirmar_exclusao_categoria(cfg, c, nome_outros)
 
 
 def _secao_categorias(cfg):
@@ -121,37 +164,7 @@ def _secao_categorias(cfg):
     nome_outros = outros["nome"] if outros else "Outros"
 
     for c in categorias:
-        modo = cfg["modo"]
-        if modo == ("cat_editar", c["id"]):
-            _form_categoria(cfg, tipo, c)
-            continue
-        # "Outros" recebe os lançamentos das excluídas: cadeado no lugar do botão de excluir
-        cadeado = comum.icone("lock", "fin-cfg-cadeado") if c["protegida"] else ""
-        dica = f' title="{_DICA_OUTROS}"' if c["protegida"] else ""
-        with st.container(horizontal=True, vertical_alignment="center", gap="small",
-                          key=f"fin_cfg_lin_c_{n}_{c['id']}"):
-            comum.md(f'<div class="fin-cfg-item"{dica}>'
-                f'<span class="fin-cfg-ponto" style="--cor:{comum.cor(c["cor"])}"></span>'
-                f'<span class="fin-cfg-nome">{escape(c["nome"])}</span>{cadeado}'
-                f'<span class="fin-cfg-uso">{_uso(c["em_uso"])}</span></div>', width="stretch")
-            clicado = _botoes_item(cfg, f"c{c['id']}", excluir=not c["protegida"])
-        if clicado == "editar":
-            _mudar(cfg, ("cat_editar", c["id"]))
-        if clicado == "excluir":
-            _mudar(cfg, ("cat_excluir", c["id"]))
-        if modo == ("cat_excluir", c["id"]):
-            em_uso = c["em_uso"]
-            texto = ("Nenhum lançamento usa esta categoria." if em_uso == 0 else
-                     f"1 lançamento irá para {nome_outros}." if em_uso == 1 else
-                     f"{em_uso} lançamentos irão para {nome_outros}.")
-
-            def excluir(categoria_id=c["id"]):
-                movidos = repo.excluir_categoria(categoria_id)
-                if not movidos:
-                    return "Categoria excluída."
-                return f"Categoria excluída. {_uso(movidos)} movido{'s' if movidos > 1 else ''} para {nome_outros}."
-
-            _confirmacao(cfg, f"c{c['id']}", c["nome"], texto, excluir)
+        _item_categoria(cfg, c, tipo, nome_outros)
 
     if not categorias:
         comum.vazio("Nenhuma categoria ainda.")
@@ -160,8 +173,6 @@ def _secao_categorias(cfg):
     elif st.button("Adicionar categoria", icon=":material/add:", width="stretch", key=f"fin_cfg_add_c_{n}"):
         _mudar(cfg, "cat_nova")
 
-
-# ---------- bancos ----------
 
 def _form_banco(cfg, banco=None):
     sufixo = f"{cfg['nonce']}_b{banco['id'] if banco else 'novo'}"
@@ -175,7 +186,7 @@ def _form_banco(cfg, banco=None):
             key=f"fin_cfg_in_sigla_{sufixo}", help="Até 3 letras, no lugar da logo",
         ).strip()
         cor = col_cor.color_picker(
-            "Cor", value=comum.cor(banco["cor"]) if banco else comum.COR_PADRAO, key=f"fin_cfg_in_bcor_{sufixo}",
+            "Cor", value=cor_valida(banco["cor"]) if banco else COR_PADRAO, key=f"fin_cfg_in_bcor_{sufixo}",
         )
         if not _salvar_cancelar(cfg, sufixo):
             return
@@ -187,13 +198,53 @@ def _form_banco(cfg, banco=None):
             return
         try:
             if banco:
-                repo.atualizar_banco(banco["id"], nome, sigla, comum.cor(cor))
+                repo.atualizar_banco(banco["id"], nome, sigla, cor_valida(cor))
             else:
-                repo.criar_banco(nome, sigla, comum.cor(cor))
+                repo.criar_banco(nome, sigla, cor_valida(cor))
         except repo.NomeDuplicado:
             st.error(f"Já existe um banco chamado “{comum.texto_markdown(nome)}” (maiúsculas e acentos não contam).")
             return
         _mudar(cfg, aviso="Banco salvo." if banco else f"Banco “{nome}” adicionado.")
+
+
+def _confirmar_exclusao_banco(cfg, b):
+    em_uso = b["em_uso"]
+    texto = ("Nenhum lançamento usa este banco." if em_uso == 0 else
+             "1 lançamento ficará sem banco." if em_uso == 1 else
+             f"{em_uso} lançamentos ficarão sem banco.")
+    if b["ativo"]:
+        texto += " Para tirar só do formulário, oculte o banco."
+
+    def excluir():
+        afetados = repo.excluir_banco(b["id"])
+        return f"Banco excluído. {_uso(afetados).capitalize()} ficou sem banco." if afetados == 1 else (
+            f"Banco excluído. {afetados} lançamentos ficaram sem banco." if afetados else "Banco excluído.")
+
+    _confirmacao(cfg, f"b{b['id']}", b["nome"], texto, excluir)
+
+
+def _item_banco(cfg, b):
+    modo = cfg["modo"]
+    if modo == ("banco_editar", b["id"]):
+        _form_banco(cfg, b)
+        return
+    oculto = '' if b["ativo"] else '<span class="fin-selo">Oculto</span>'
+    clicado = _linha_item(
+        cfg, "b", b["id"],
+        f'<div class="fin-cfg-item{"" if b["ativo"] else " inativo"}">'
+        f'{comum.selo_banco(b["sigla"], b["nome"], b["cor"])}{oculto}'
+        f'<span class="fin-cfg-uso">{_uso(b["em_uso"])}</span></div>',
+        visivel=bool(b["ativo"]),
+    )
+    if clicado == "editar":
+        _mudar(cfg, ("banco_editar", b["id"]))
+    if clicado == "visivel":
+        repo.definir_banco_ativo(b["id"], not b["ativo"])
+        _mudar(cfg, aviso=f"{b['nome']} {'oculto do formulário' if b['ativo'] else 'de volta ao formulário'}.")
+    if clicado == "excluir":
+        _mudar(cfg, ("banco_excluir", b["id"]))
+    if modo == ("banco_excluir", b["id"]):
+        _confirmar_exclusao_banco(cfg, b)
 
 
 def _secao_bancos(cfg):
@@ -201,38 +252,7 @@ def _secao_bancos(cfg):
     st.caption("Banco oculto some do formulário de lançamento; os lançamentos antigos continuam mostrando o banco.")
     bancos = repo.listar_bancos(incluir_ocultos=True)
     for b in bancos:
-        modo = cfg["modo"]
-        if modo == ("banco_editar", b["id"]):
-            _form_banco(cfg, b)
-            continue
-        oculto = '' if b["ativo"] else '<span class="fin-selo">Oculto</span>'
-        with st.container(horizontal=True, vertical_alignment="center", gap="small",
-                          key=f"fin_cfg_lin_b_{n}_{b['id']}"):
-            comum.md(f'<div class="fin-cfg-item{"" if b["ativo"] else " inativo"}">'
-                f'{comum.selo_banco(b["sigla"], b["nome"], b["cor"])}{oculto}'
-                f'<span class="fin-cfg-uso">{_uso(b["em_uso"])}</span></div>', width="stretch")
-            clicado = _botoes_item(cfg, f"b{b['id']}", visivel=bool(b["ativo"]))
-        if clicado == "editar":
-            _mudar(cfg, ("banco_editar", b["id"]))
-        if clicado == "visivel":
-            repo.definir_banco_ativo(b["id"], not b["ativo"])
-            _mudar(cfg, aviso=f"{b['nome']} {'oculto do formulário' if b['ativo'] else 'de volta ao formulário'}.")
-        if clicado == "excluir":
-            _mudar(cfg, ("banco_excluir", b["id"]))
-        if modo == ("banco_excluir", b["id"]):
-            em_uso = b["em_uso"]
-            texto = ("Nenhum lançamento usa este banco." if em_uso == 0 else
-                     "1 lançamento ficará sem banco." if em_uso == 1 else
-                     f"{em_uso} lançamentos ficarão sem banco.")
-            if b["ativo"]:
-                texto += " Para tirar só do formulário, oculte o banco."
-
-            def excluir(banco_id=b["id"]):
-                afetados = repo.excluir_banco(banco_id)
-                return f"Banco excluído. {_uso(afetados).capitalize()} ficou sem banco." if afetados == 1 else (
-                    f"Banco excluído. {afetados} lançamentos ficaram sem banco." if afetados else "Banco excluído.")
-
-            _confirmacao(cfg, f"b{b['id']}", b["nome"], texto, excluir)
+        _item_banco(cfg, b)
 
     if not bancos:
         comum.vazio("Nenhum banco ainda.")
@@ -242,14 +262,11 @@ def _secao_bancos(cfg):
         _mudar(cfg, "banco_novo")
 
 
-# ---------- regras (aprendidas na revisão da importação) ----------
-
 PADRAO_MAX = 80
 _TIPO_REGRA = {None: "Não mudar", "fixo": "Fixo", "variavel": "Variável"}
 
 
 def _rotulos_categorias():
-    """{id: rótulo} de todas as categorias: gastos primeiro, depois as de entrada (com "· entrada")."""
     rotulos = {}
     for tipo, sufixo in (("gasto", ""), ("entrada", " · entrada")):
         for c in repo.listar_categorias(tipo):
@@ -323,11 +340,11 @@ def _secao_regras(cfg):
         if cfg["modo"] == ("regra_editar", r["id"]):
             _form_regra(cfg, r)
             continue
-        with st.container(horizontal=True, vertical_alignment="center", gap="small",
-                          key=f"fin_cfg_lin_r_{n}_{r['id']}"):
-            comum.md(f'<div class="fin-cfg-item"><span class="fin-cfg-nome">{escape(r["padrao"])}</span>'
-                     f'<span class="fin-cfg-uso">{_acao_regra(r)}</span></div>', width="stretch")
-            clicado = _botoes_item(cfg, f"r{r['id']}")
+        clicado = _linha_item(
+            cfg, "r", r["id"],
+            f'<div class="fin-cfg-item"><span class="fin-cfg-nome">{escape(r["padrao"])}</span>'
+            f'<span class="fin-cfg-uso">{_acao_regra(r)}</span></div>',
+        )
         if clicado == "editar":
             _mudar(cfg, ("regra_editar", r["id"]))
         if clicado == "excluir":
@@ -347,8 +364,6 @@ def _secao_regras(cfg):
         _mudar(cfg, "regra_nova")
 
 
-# ---------- geral ----------
-
 def _secao_geral(cfg):
     _bloco_saldo(cfg)
     _bloco_nome(cfg)
@@ -356,8 +371,9 @@ def _secao_geral(cfg):
 
 def _bloco_nome(cfg):
     n = cfg["nonce"]
-    versao = cfg.setdefault("nome_versao", 0)  # muda a cada gravação: o campo volta com o valor do banco
-    comum.secao("badge", "Seu nome")
+    # A versão muda a cada gravação, e o campo volta com o valor que está no banco.
+    versao = cfg.setdefault("nome_versao", 0)
+    secao("badge", "Seu nome")
     st.caption("Usado na importação para reconhecer transferências entre as suas contas: o Pix que cita este nome "
                "vem desmarcado na revisão, para não contar como renda.")
     with st.container(horizontal=True, vertical_alignment="bottom", gap="small", key=f"fin_cfg_nome_{n}"):
@@ -375,28 +391,27 @@ def _bloco_nome(cfg):
 def _bloco_saldo(cfg):
     n = cfg["nonce"]
     saldo = repo.obter_saldo_inicial()
-    versao = cfg.setdefault("saldo_versao", 0)  # muda a cada gravação: o campo volta com o valor do banco
-    comum.secao("account_balance", "Saldo inicial")
+    # A versão muda a cada gravação, e o campo volta com o valor que está no banco.
+    versao = cfg.setdefault("saldo_versao", 0)
+    secao("account_balance", "Saldo inicial")
     st.caption("Quanto você tinha antes do primeiro lançamento: é o ponto de partida do fluxo de caixa. "
                "Pode ser negativo (ex.: começou devendo).")
     with st.container(horizontal=True, vertical_alignment="bottom", gap="small", key=f"fin_cfg_saldo_{n}"):
         numero = st.number_input(
-            "Saldo inicial (R$)", value=float(saldo), min_value=-float(calc.VALOR_MAX),
-            max_value=float(calc.VALOR_MAX), step=0.01, format="%.2f", key=f"fin_cfg_in_saldo_{n}_{versao}",
+            "Saldo inicial (R$)", value=float(saldo), min_value=-float(VALOR_MAX),
+            max_value=float(VALOR_MAX), step=0.01, format="%.2f", key=f"fin_cfg_in_saldo_{n}_{versao}",
             width="stretch",
         )
         salvar = st.button("Salvar", type="primary", key=f"fin_cfg_saldo_ok_{n}")
     if salvar:
         valor = calc.para_decimal(numero)
-        if abs(valor) > calc.VALOR_MAX:
+        if abs(valor) > VALOR_MAX:
             st.error("Valor alto demais.")
             return
         repo.definir_saldo_inicial(valor)
         cfg["saldo_versao"] = versao + 1
-        _mudar(cfg, aviso=f"Saldo inicial salvo: {calc.fmt_brl(valor)}.")
+        _mudar(cfg, aviso=f"Saldo inicial salvo: {fmt_brl(valor)}.")
 
-
-# ---------- diálogo ----------
 
 def abrir():
     n = st.session_state.get("fin_cfg_nonce", 0) + 1

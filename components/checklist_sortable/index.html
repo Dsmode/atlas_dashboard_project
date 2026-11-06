@@ -3,11 +3,14 @@
 <head>
 <meta charset="utf-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap');
+  @font-face {
+    font-family: 'Outfit'; font-style: normal; font-weight: 100 900; font-display: swap;
+    src: url('outfit-latin.woff2') format('woff2');
+  }
   html, body { margin: 0; padding: 0; background: transparent; }
   body { font-family: 'Outfit', 'Source Sans', sans-serif; font-size: 14px; color: #ececf1; }
-  /* folga em volta: a linha levantada (maior, com sombra) não pode ser cortada pela borda do iframe;
-     o CSS do app compensa a folga lateral com margem negativa no iframe */
+  /* Folga em volta: a linha levantada (maior, com sombra) não pode ser cortada pela borda do iframe. O
+     CSS do app compensa a folga lateral com margem negativa no iframe. */
   #lista { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 16px; }
 
   .item {
@@ -17,13 +20,13 @@
     transition: border-color .2s, background .2s, box-shadow .2s;
   }
   .item:hover { border-color: rgba(180, 76, 255, 0.45); background: rgba(180, 76, 255, 0.05); }
-  /* a linha levantada acompanha o ponteiro (transform), com sombra e brilho roxo */
+  /* A linha levantada acompanha o ponteiro, com sombra e brilho roxo. */
   .item.arrastando {
     z-index: 3; transition: none; cursor: grabbing;
     background: #231d36; border-color: #b44cff; transform-origin: center;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(180, 76, 255, 0.35);
   }
-  /* ao soltar, a linha desliza até o encaixe */
+  /* Ao soltar, a linha desliza até o encaixe. */
   .item.assentando { z-index: 2; transition: transform .22s cubic-bezier(.2, .8, .3, 1), box-shadow .22s, border-color .22s; }
 
   .alca { display: flex; align-items: center; cursor: grab; color: #6f6f82; padding: 4px 2px; touch-action: none; transition: color .2s; }
@@ -48,7 +51,7 @@
   @keyframes pop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
 
   .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; color: #ececf1; transition: color .3s; }
-  /* o risco "corre" da esquerda para a direita ao concluir, só sob o texto */
+  /* O risco corre da esquerda para a direita ao concluir, só sob o texto. */
   .t { background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 0 1.5px; transition: background-size .35s ease; }
   .feita .txt { color: #8d8d9c; }
   .feita .t { background-size: 100% 1.5px; }
@@ -65,7 +68,7 @@
 <script>
   const lista = document.getElementById("lista");
   const semMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const elementos = new Map(); // id da tarefa -> linha, para atualizar sem recriar (preserva as animações)
+  const elementos = new Map(); // id da tarefa → linha: atualiza sem recriar e preserva as animações
   let contador = 0;
 
   const ALCA = '<svg viewBox="0 0 14 18"><circle cx="4" cy="3" r="1.5"/><circle cx="10" cy="3" r="1.5"/><circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/><circle cx="4" cy="15" r="1.5"/><circle cx="10" cy="15" r="1.5"/></svg>';
@@ -125,7 +128,7 @@
     ajustarAltura();
   }
 
-  // Desliza as outras linhas até o novo lugar (FLIP): mede antes, move no DOM, mede depois e anima a diferença.
+  // FLIP: mede as linhas, move no DOM, mede de novo e anima a diferença para as outras linhas deslizarem até o novo lugar.
   function moverAnimado(el, alvo) {
     const outros = [...lista.children].filter((c) => c !== el);
     const antes = new Map(outros.map((c) => [c, c.offsetTop]));
@@ -142,22 +145,22 @@
       if (!c.style.transform) continue;
       c.style.transition = "transform .2s cubic-bezier(.2, .8, .3, 1)";
       c.style.transform = "";
-      setTimeout(() => { c.style.transition = ""; }, 230); // devolve as transições de hover ao CSS
+      setTimeout(() => { c.style.transition = ""; }, 230); // devolve ao CSS as transições de hover
     }
   }
 
-  // Arrasto por ponteiro. A captura fica na lista (que nunca muda de lugar): reposicionar a
-  // linha no DOM faz o navegador soltar a captura de quem foi movido.
+  // Arrasto por ponteiro. A captura fica na lista, que nunca muda de lugar: reposicionar uma linha
+  // no DOM faz o navegador soltar a captura de quem foi movido.
   function ligarArrasto(alca, el) {
     alca.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       const ordemInicial = ids();
-      const deslocamento = e.clientY - el.getBoundingClientRect().top; // onde a linha foi agarrada
+      const deslocamento = e.clientY - el.getBoundingClientRect().top; // ponto em que a linha foi agarrada
       el.classList.remove("assentando");
       el.classList.add("arrastando");
       try { lista.setPointerCapture(e.pointerId); } catch (_) {}
 
-      // a linha levantada segue o ponteiro: o deslocamento é medido a partir do lugar dela no fluxo
+      // a linha levantada segue o ponteiro; o deslocamento parte do lugar dela no fluxo
       const seguir = (y) => {
         el.style.transform = "none";
         const topo = el.getBoundingClientRect().top;
@@ -165,7 +168,7 @@
       };
 
       const mover = (ev) => {
-        const y = ev.clientY - lista.getBoundingClientRect().top; // coordenada dentro da lista
+        const y = ev.clientY - lista.getBoundingClientRect().top; // posição dentro da lista
         const irmaos = [...lista.children].filter((c) => c !== el);
         const alvo = irmaos.find((c) => y < c.offsetTop + c.offsetHeight / 2) || null;
         if (alvo !== el.nextElementSibling) moverAnimado(el, alvo);

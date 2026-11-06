@@ -1,15 +1,13 @@
-/* ---------- Controle Financeiro: aba Extrato ---------- */
-/* grade 2×2 (a mesma altura por linha vem do base.css); o cartão é contêiner das consultas de largura */
+/* Aba Extrato */
+/* Grade 2×2 (a altura igual por linha vem do base.css). O cartão é contêiner das consultas de largura. */
 div[class*="st-key-fin_card_ext_"] { container-type: inline-size; }
 div[class*="st-key-fin_ext_grade"] { gap: var(--fin-gap); }
 
-/* botão Filtros acima da grade, à direita (o espaço vem do gap do módulo) */
 div[class*="st-key-fin_ext_filtros"] button { min-height: 0; height: 2.3rem; border-radius: 10px; font-weight: 500; }
 div[data-testid="stPopoverBody"]:has([class*="st-key-fin_flt_limpar"]) { min-width: 22rem; max-width: 30rem; }
-/* o popover fica aberto no navegador quando um diálogo abre: esconde só ele */
+/* O servidor não fecha o popover quando o diálogo abre; só ele é escondido. */
 body:has(div[data-testid="stDialog"]) [data-testid="stPopoverBody"]:has([class*="st-key-fin_flt_limpar"]) { display: none; }
 
-/* cabeçalho dos blocos: título · total à esquerda, botão (copiar fixos) à direita */
 div[class*="st-key-fin_ext_topo_"] { flex-wrap: nowrap; margin-bottom: .1rem; }
 div[class*="st-key-fin_ext_topo_"] .fin-card-head { min-width: 0; }
 div[class*="st-key-fin_ext_topo_"] .fin-card-titulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -21,7 +19,7 @@ div[class*="st-key-fin_ext_copiar"] button {
     min-height: 0; height: 2rem; padding: 0 .7rem; border-radius: 9px; font-size: .8rem; white-space: nowrap;
 }
 
-/* ---------- listas: colunas alinhadas como tabela ---------- */
+/* Listas: colunas alinhadas como tabela */
 div[class*="st-key-fin_card_ext_"] {
     --fin-ext-cols: 2.5rem minmax(0, 1fr) 6.4rem 4.9rem 6rem;
     --fin-ext-acoes: 5.75rem;
@@ -30,7 +28,8 @@ div[class*="st-key-fin_card_ext_"] {
 div[class*="st-key-fin_ext_lista_"] { gap: 0; scrollbar-width: thin; scrollbar-color: rgba(180, 76, 255, .35) transparent; padding-right: .15rem; }
 div[class*="st-key-fin_ext_lista_"] [data-testid="stMarkdownContainer"] p { margin: 0; }
 
-/* cabeçalho da tabela: fica preso no topo da área rolável (alinha com as linhas mesmo com a barra de rolagem) */
+/* O cabeçalho da tabela fica preso no topo da área rolável e continua alinhado às linhas mesmo com a
+   barra de rolagem. */
 div[class*="st-key-fin_ext_lista_"] > [data-testid="stElementContainer"]:has(.fin-ext-cab) {
     position: sticky; top: 0; z-index: 2; background: rgba(22, 19, 34, 0.97);
 }
@@ -61,16 +60,15 @@ div[class*="st-key-fin_ext_lin_"] > div:first-child { min-width: 0; }
 .fin-ext-banco .fin-banco > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fin-ext-banco .fin-banco b { flex: none; }
 
-/* ações: observação (dica ao passar o mouse), editar e excluir (visual comum no base.css) */
 div[class*="st-key-fin_ext_acoes_"] { flex: none; flex-wrap: nowrap; width: var(--fin-ext-acoes); justify-content: flex-end; }
 div[class*="st-key-fin_ext_acoes_"] button { width: 1.75rem; height: 1.75rem; }
 div[class*="st-key-fin_ext_acoes_"] button [data-testid="stIconMaterial"] { font-size: 1.05rem; }
 div[class*="st-key-fin_ext_bobs_"] button:not(:disabled) { color: var(--fin-destaque); }
 div[class*="st-key-fin_ext_bobs_"] button:disabled { opacity: .28; background: transparent; border-color: transparent; }
 
-/* blocos estreitos (tela menor): a forma fica só no ícone e depois o banco só na sigla */
+/* Em blocos estreitos a forma de pagamento vira só o ícone e o banco só a sigla. */
 @container (max-width: 600px) {
-    /* a consulta vale só para os descendentes do cartão: as colunas mudam na área da lista */
+    /* A consulta vale só para os descendentes do cartão: as colunas mudam na área da lista. */
     div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.5rem minmax(0, 1fr) 6.2rem 1.3rem 6rem; }
     .fin-ext-forma .fin-forma { font-size: 0; }
     .fin-ext-forma .fin-forma .material-icon { font-size: 1.05rem; margin: 0; }
@@ -81,13 +79,13 @@ div[class*="st-key-fin_ext_bobs_"] button:disabled { opacity: .28; background: t
     .fin-ext-banco .fin-banco > span { display: none; }
 }
 
-/* ---------- formulário ---------- */
+/* Formulário */
 div[class*="st-key-fin_card_ext_form"] div[class*="st-key-fin_lanc_ok_"] { margin-top: .35rem; }
 div[class*="st-key-fin_card_ext_form"] div[class*="st-key-fin_lanc_ok_"] button { height: 2.6rem; border-radius: 12px; font-weight: 600; }
 div[class*="st-key-fin_card_ext_form"] [data-testid="stButtonGroup"] button,
 div[data-testid="stDialog"] div[class*="st-key-fin_edt_"] [data-testid="stButtonGroup"] button { flex: 1; }
 
-/* ---------- diálogos ---------- */
+/* Diálogos */
 .fin-ext-confirma {
     display: flex; align-items: center; justify-content: space-between; gap: 1rem;
     padding: .65rem .9rem; margin-bottom: .6rem;
@@ -96,7 +94,6 @@ div[data-testid="stDialog"] div[class*="st-key-fin_edt_"] [data-testid="stButton
 .fin-ext-confirma-dados { display: flex; flex-direction: column; align-items: flex-end; gap: .1rem; font-size: .85rem; color: var(--atlas-text-dim); }
 .fin-ext-confirma-txt { color: #c9c9d6; font-size: .92rem; }
 
-/* copiar fixos: uma linha por gasto, com o checkbox à esquerda */
 .fin-ext-copia-intro { color: #c9c9d6; font-size: .9rem; margin-bottom: .4rem; }
 div[class*="st-key-fin_cop_lista"] { gap: .3rem; max-height: 55vh; overflow-y: auto; scrollbar-width: thin; }
 div[class*="st-key-fin_cop_lin_"] { gap: .6rem; padding: .35rem .7rem; }

@@ -1,4 +1,4 @@
-﻿# Cria o atalho "ATLAS" na área de trabalho e no menu Iniciar.
+﻿# Cria o atalho ATLAS na área de trabalho e no menu Iniciar.
 # Uso: powershell -ExecutionPolicy Bypass -File launcher\criar_atalho.ps1
 $ErrorActionPreference = "Stop"
 

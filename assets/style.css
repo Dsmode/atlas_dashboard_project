@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@font-face {
+    font-family: 'Outfit';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url(__FONTE__) format('woff2');
+}
 
 :root {
     --atlas-bg: #09090e;
@@ -10,7 +16,7 @@
     --atlas-purple-soft: rgba(180, 76, 255, 0.16);
     --atlas-magenta: #ff3dd8;
     --atlas-text-dim: #8d8d9c;
-    /* vidro (HUD glassmorphism) */
+    /* Vidro: fundo translúcido com desfoque. */
     --glass-bg: rgba(27, 24, 40, 0.55);
     --glass-bg-strong: rgba(18, 16, 28, 0.62);
     --glass-border: rgba(210, 170, 255, 0.14);
@@ -22,7 +28,8 @@ html, body, [class*="st-"], .stApp, button, input, textarea {
     font-family: 'Outfit', sans-serif !important;
 }
 
-/* material icons do Streamlit precisam manter a própria fonte (inclui os ícones de alerta e de toast) */
+/* Os ícones do Streamlit (inclusive os de alerta e de toast) têm fonte própria, que a Outfit não pode
+   substituir. */
 span[data-testid="stIconMaterial"],
 span[data-testid$="DynamicIcon"] {
     font-family: 'Material Symbols Rounded' !important;
@@ -40,7 +47,7 @@ header[data-testid="stHeader"] { background: transparent; }
 footer, #MainMenu { visibility: hidden; }
 .block-container { padding-top: 2.2rem; max-width: 1100px; }
 
-/* ---------- Sidebar (HUD) ---------- */
+/* Sidebar (HUD) */
 section[data-testid="stSidebar"] {
     background: var(--glass-bg-strong);
     backdrop-filter: var(--glass-blur);
@@ -51,11 +58,10 @@ section[data-testid="stSidebar"] {
 section[data-testid="stSidebar"] > div:first-child { background: transparent; }
 [data-testid="stSidebarCollapseButton"],
 [data-testid="stSidebarCollapsedControl"] { display: none; }
-/* o cabeçalho vazio do Streamlit ocupava espaço e empurrava a marca para baixo */
+/* O cabeçalho vazio do Streamlit ocupava espaço e empurrava a marca para baixo. */
 [data-testid="stSidebarHeader"] { display: none; }
 [data-testid="stSidebarUserContent"] { padding-top: 1.1rem; }
 
-/* recuo comum da marca, legenda e botões do menu (alinha tudo pelo ícone) */
 section[data-testid="stSidebar"] { --nav-pad: .5rem; }
 .atlas-brand {
     display: flex; align-items: center; gap: .6rem;
@@ -67,21 +73,20 @@ section[data-testid="stSidebar"] { --nav-pad: .5rem; }
     background: var(--atlas-magenta);
     box-shadow: 0 0 12px var(--atlas-magenta), 0 0 3px #fff inset;
 }
-/* o Streamlit puxa -16px embaixo de todo markdown: a legenda invadia o botão de baixo */
+/* O Streamlit aplica -16px de margem abaixo de todo markdown; sem zerar, a legenda invadia o botão
+   seguinte. */
 section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
-/* separador + legenda da seção */
 .atlas-nav-label {
     color: var(--atlas-text-dim); font-size: .72rem; letter-spacing: .16em;
     margin: .7rem 0 .6rem; padding: 1rem calc(var(--nav-pad) + 1px) 0;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* a coluna da sidebar ocupa a altura toda para a conta ficar no rodapé */
+/* A coluna da sidebar ocupa a altura toda para a conta ficar no rodapé. */
 [data-testid="stSidebarUserContent"] { min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 1rem; }
 [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"] { gap: .3rem; }
 [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]:not([class*="st-key-"]) { min-height: calc(100vh - 2.2rem); }
 
-/* itens do menu: sem moldura, ícone de contorno e texto cinza */
 section[data-testid="stSidebar"] .stButton > button {
     position: relative; overflow: hidden;
     justify-content: flex-start;
@@ -103,13 +108,12 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     border-color: rgba(255, 255, 255, 0.05);
     color: #fff;
 }
-/* módulo ativo: faixa que vai de escuro a roxo e barra neon na borda direita */
 section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
     background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0%, rgba(122, 47, 209, 0.12) 100%);
     border-color: rgba(255, 255, 255, 0.07);
     color: #fff;
 }
-/* o roxo da faixa "respira": a camada colorida sobe e desce de intensidade */
+/* A camada roxa da faixa sobe e desce de intensidade, como se respirasse. */
 section[data-testid="stSidebar"] .stButton > button[kind="primary"]::before {
     content: ""; position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(90deg, transparent 0%, rgba(122, 47, 209, 0.3) 55%, rgba(180, 76, 255, 0.55) 100%);
@@ -130,8 +134,7 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"]::after {
     box-shadow: 0 0 12px 1px rgba(180, 76, 255, 0.85);
 }
 
-/* conta do usuário, no rodapé */
-/* o wrapper (filho direto do bloco flex) é quem desce para o rodapé */
+/* Quem desce para o rodapé é o wrapper, filho direto do bloco flex. */
 [data-testid="stLayoutWrapper"]:has(> .st-key-atlas_conta) { margin-top: auto; }
 section[data-testid="stSidebar"] .st-key-atlas_conta {
     box-sizing: border-box; gap: 0;
@@ -142,7 +145,7 @@ section[data-testid="stSidebar"] .st-key-atlas_conta {
     box-shadow: var(--glass-shadow);
 }
 .st-key-atlas_conta [data-testid="stMarkdownContainer"] {
-    margin: 0; /* o Streamlit põe -16px embaixo e o cartão perdia a altura */
+    margin: 0; /* A margem de -16px do Streamlit fazia o cartão perder altura. */
     display: flex; align-items: center; gap: .7rem;
 }
 .conta-avatar {
@@ -161,7 +164,7 @@ section[data-testid="stSidebar"] .st-key-atlas_conta {
     font-feature-settings: 'liga'; -webkit-font-feature-settings: 'liga';
 }
 
-/* ---------- Cartões ---------- */
+/* Cartões */
 div[class*="st-key-meta_card"],
 div[class*="st-key-home_card"] {
     background: var(--glass-bg);
@@ -186,11 +189,9 @@ div[class*="st-key-meta_card"]:hover {
 .atlas-title { font-size: 1.9rem; font-weight: 600; margin-bottom: .2rem; }
 .atlas-sub { color: var(--atlas-text-dim); margin-bottom: 1.2rem; }
 
-/* cabeçalho do cartão: título e etiquetas à esquerda, grupo de ações à direita */
 div[class*="st-key-meta_head"] { flex-wrap: nowrap; align-items: flex-start; gap: 1rem; margin-bottom: .75rem; }
 .meta-title { font-size: 1.2rem; font-weight: 600; line-height: 1.4; margin: 0 0 .5rem 0; overflow-wrap: anywhere; }
 .meta-title .badge { margin-left: .65rem; vertical-align: middle; }
-/* status (ao lado do título) e categorias (linha própria): mesma altura, raio e tipografia */
 .badge, .cat-chip {
     display: inline-flex; align-items: center; box-sizing: border-box;
     height: 1.5rem; padding: 0 .75rem; border-radius: 999px;
@@ -220,7 +221,7 @@ div[class*="st-key-meta_actions"] button[aria-label="Excluir"]:hover {
     background: rgba(255, 77, 77, 0.12); border-color: rgba(255, 77, 77, 0.45); color: #ff7a7a;
 }
 
-/* ---------- Painéis de métricas ---------- */
+/* Painéis de métricas */
 div[class*="st-key-meta_panel"] {
     --neon: 180, 76, 255;
     background: var(--glass-bg);
@@ -246,12 +247,12 @@ div[class*="st-key-meta_panel_atrasadas"] { --neon: 255, 77, 77; }
 .panel-head > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .panel-head .material-icon { margin: 0; color: var(--atlas-text-dim); }
 .panel-value { font-size: 2.4rem; font-weight: 700; line-height: 1.15; margin: .3rem 0 .1rem 0; }
-/* altura fixa de duas linhas: os três painéis ficam iguais mesmo com texto que quebra */
+/* Duas linhas de altura fixa deixam os três painéis iguais mesmo quando o texto quebra. */
 .panel-sub { color: var(--atlas-text-dim); font-size: .8rem; line-height: 1.3; min-height: 2.6em; padding-bottom: .9rem; box-sizing: content-box; }
 div[class*="st-key-meta_panel_ativas"] .panel-head > span:first-child { color: #d39bff; }
 div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color: #ff7a7a; }
 
-/* ---------- Progresso do cartão ---------- */
+/* Progresso do cartão */
 .meta-info { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; color: var(--atlas-text-dim); font-size: .88rem; margin: .45rem 0 1rem 0; }
 .meta-info .material-icon { font-size: 1.05rem; margin-right: .45rem; }
 .meta-item { display: inline-flex; align-items: center; }
@@ -261,7 +262,7 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 .meta-item.prio-baixa, .meta-item.prio-baixa .material-icon { color: #7fe3d6; }
 .prog-head { display: flex; justify-content: space-between; font-size: .8rem; margin-bottom: .3rem; }
 .prog-track { height: 8px; border-radius: 999px; background: #2b2b37; overflow: hidden; }
-/* a animação enche a barra do zero ao carregar; a transição anima mudanças depois */
+/* A animação enche a barra do zero ao carregar; a transição cuida das mudanças depois. */
 @keyframes prog-fill { from { width: 0; } }
 .prog-fill {
     height: 100%; border-radius: 999px;
@@ -272,13 +273,13 @@ div[class*="st-key-meta_panel_atrasadas"] .panel-head > span:first-child { color
 }
 .prog-foot { color: var(--atlas-text-dim); font-size: .78rem; margin-top: .3rem; padding-bottom: .5rem; }
 
-/* ---------- Modos de progresso (quantidade e valor) ---------- */
+/* Modos de progresso (quantidade e valor) */
 .prog-neg { color: #ff7a7a; }
 .meta-ritmo { display: flex; align-items: center; color: var(--atlas-text-dim); font-size: .82rem; margin: 0 0 .7rem 0; }
 .meta-ritmo .material-icon { font-size: 1.05rem; margin-right: .45rem; }
 .val-prefixo { color: var(--atlas-text-dim); font-size: .95rem; font-weight: 500; }
 
-/* meta atingida: o ✓ do topo pulsa em verde neon (o cartão não muda de tamanho) */
+/* Meta atingida: o ✓ do topo pulsa em verde neon sem mudar o tamanho do cartão. */
 @keyframes neon-concluir {
     50% { box-shadow: 0 0 12px rgba(57, 255, 156, .85), 0 0 28px rgba(57, 255, 156, .5), inset 0 0 10px rgba(57, 255, 156, .3); }
 }
@@ -294,7 +295,6 @@ div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button:hover {
     div[class*="st-key-meta_actions"] div[class*="st-key-conc_ok"] button { animation: none; }
 }
 
-/* descrição longa: 3 linhas e o botão Ver mais / Ver menos */
 .meta-desc.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: .2rem; }
 div[class*="st-key-desc_toggle"] { margin: 0 0 .8rem 0; }
 div[class*="st-key-desc_toggle"] button {
@@ -302,7 +302,6 @@ div[class*="st-key-desc_toggle"] button {
 }
 div[class*="st-key-desc_toggle"] button:hover { background: none; border: none; color: #fff; }
 
-/* controles dentro do cartão: [ − ] valor [ + ] e campo de R$ com Adicionar / Remover */
 div[class*="st-key-meta_qtd"], div[class*="st-key-meta_val"] { margin: .1rem 0 .8rem 0; }
 div[class*="st-key-meta_qtd"] { justify-content: flex-start; }
 div[class*="st-key-meta_qtd"] > div { flex: 0 0 auto; width: auto; }
@@ -323,10 +322,10 @@ div[class*="st-key-meta_qtd"] [data-testid="stNumberInputStepDown"],
 div[class*="st-key-meta_val"] [data-testid="stNumberInputStepUp"],
 div[class*="st-key-meta_val"] [data-testid="stNumberInputStepDown"] { display: none; }
 
-/* o iframe do checklist tem folga interna (para a linha levantada não ser cortada); a margem lateral negativa a compensa */
+/* O iframe do checklist tem folga interna para a linha levantada não ser cortada; a margem lateral
+   negativa compensa essa folga. */
 iframe[title*="checklist_sortable"] { display: block; width: calc(100% + 24px); max-width: none; margin: 0 -12px; }
 
-/* botão que abre/fecha o checklist */
 div[class*="st-key-toggle_check"] { border-top: 1px solid var(--glass-border); padding-top: .15rem; }
 div[class*="st-key-toggle_check"] button {
     width: 100%; min-height: 0; padding: .35rem .1rem; border: none; border-radius: 8px;
@@ -337,7 +336,7 @@ div[class*="st-key-toggle_check"] button > div,
 div[class*="st-key-toggle_check"] button span[data-has-shortcut] { justify-content: flex-start; width: 100%; }
 div[class*="st-key-toggle_check"] button:hover { color: #fff; background: rgba(255, 255, 255, 0.03); }
 
-/* ---------- Barra de busca + filtro de categorias ---------- */
+/* Barra de busca + filtro de categorias */
 div[class*="st-key-busca_barra"] {
     flex-wrap: nowrap; align-items: center; gap: 0;
     min-height: 3.1rem; padding: .2rem .45rem .2rem 1.15rem; margin-bottom: .2rem;
@@ -356,10 +355,10 @@ div[class*="st-key-busca_barra"]:focus-within {
 }
 div[class*="st-key-busca_barra"] p { margin: 0; }
 .busca-lupa { display: block; color: var(--atlas-text-dim); font-size: 1.3rem; line-height: 1; margin: 0 .55rem 0 0; }
-/* só o ícone da lupa (markdown direto na barra); o texto do botão de categorias não entra aqui */
+/* Só o ícone da lupa entra aqui, não o texto do botão de categorias. */
 div[class*="st-key-busca_barra"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 div[class*="st-key-busca_barra"] > [data-testid="stElementContainer"] [data-testid="stMarkdownContainer"] p { line-height: 1; }
-/* o campo perde a moldura própria: a pílula é a moldura */
+/* O campo perde a moldura própria: a pílula faz esse papel. */
 div[class*="st-key-w_busca_metas"] [data-testid="stTextInputRootElement"] {
     border: none; background: transparent; box-shadow: none;
 }
@@ -369,7 +368,6 @@ div[class*="st-key-busca_limpar"] button {
     color: var(--atlas-text-dim);
 }
 div[class*="st-key-busca_limpar"] button:hover { color: #fff; background: var(--atlas-purple-soft); }
-/* botão de categorias: parte da pílula, separado por um divisor fino */
 div[class*="st-key-busca_categorias"] {
     border-left: 1px solid var(--glass-border); padding-left: .45rem; margin-left: .45rem;
 }
@@ -382,7 +380,7 @@ div[class*="st-key-busca_categorias"] button[aria-expanded="true"] {
     background: var(--atlas-purple-soft); color: #fff;
 }
 
-/* categorias marcadas no filtro: linha de altura fixa (não desloca a página), chips menores com x */
+/* Linha de altura fixa: a página não se desloca ao marcar uma categoria. */
 div[class*="st-key-flt_chips"] { flex-wrap: nowrap; height: 1.9rem; margin: 0 0 .2rem 1rem; overflow: hidden; }
 .flt-vazio { color: var(--atlas-text-dim); font-size: .74rem; opacity: .7; }
 div[class*="st-key-flt_chip_"] button, div[class*="st-key-dlg_chip_"] button {
@@ -395,7 +393,7 @@ div[class*="st-key-flt_chip_"] button [data-testid="stIconMaterial"], div[class*
 div[class*="st-key-flt_limpar_tudo"] button { min-height: 0; height: 1.4rem; color: var(--atlas-text-dim); font-size: .72rem; }
 div[class*="st-key-flt_limpar_tudo"] button:hover { color: #fff; background: transparent; }
 
-/* ---------- Diálogo de meta ---------- */
+/* Diálogo de meta */
 div[data-testid="stDialog"] div[role="dialog"] {
     background: rgba(20, 18, 31, 0.94);
     backdrop-filter: var(--glass-blur);
@@ -404,7 +402,6 @@ div[data-testid="stDialog"] div[role="dialog"] {
     border-radius: 18px;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 44px -14px rgba(180, 76, 255, 0.45);
 }
-/* seções: ícone + rótulo pequeno em caixa alta, com um filete embaixo */
 .dlg-sec {
     display: flex; align-items: center; gap: .5rem;
     margin: 1.2rem 0 .3rem; padding-bottom: .5rem; border-bottom: 1px solid var(--glass-border);
@@ -413,7 +410,6 @@ div[data-testid="stDialog"] div[role="dialog"] {
 .dlg-sec .material-icon { margin: 0; font-size: 1.1rem; }
 .dlg-rodape-linha { height: 1px; margin-top: .6rem; background: var(--glass-border); }
 
-/* categorias no diálogo: campo com os chips marcados e o "Adicionar" tracejado no fim */
 div[class*="st-key-dlg_cat_campo"] {
     flex-wrap: wrap; min-height: 2.8rem; padding: .45rem .75rem; gap: .4rem;
     background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: .6rem;
@@ -422,7 +418,7 @@ div[class*="st-key-dlg_cat_campo"] {
 div[class*="st-key-dlg_cat_campo"]:hover { border-color: rgba(180, 76, 255, 0.4); }
 div[class*="st-key-dlg_cat_campo"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 div[class*="st-key-dlg_cat_campo"] [data-testid="stMarkdownContainer"] p { margin: 0; }
-/* o wrapper do popover tinha ~3,6 px a mais embaixo do botão (linha em linha): flex tira essa folga */
+/* O wrapper do popover deixava cerca de 3,6 px a mais abaixo do botão; o flex remove essa folga. */
 div[class*="st-key-dlg_cat_add"], div[class*="st-key-dlg_cat_add"] [data-testid="stPopover"],
 div[class*="st-key-dlg_cat_add"] [data-testid="stPopover"] > div { display: flex; align-items: center; }
 div[class*="st-key-dlg_chip_"] button { height: 1.5rem; }
@@ -433,7 +429,6 @@ div[class*="st-key-dlg_cat_add"] button {
 }
 div[class*="st-key-dlg_cat_add"] button:hover { background: var(--atlas-purple-soft); color: #fff; }
 
-/* tarefas do diálogo: linhas de vidro com prazo discreto e lixeira que acende no hover */
 div[class*="st-key-dlg_tarefa_"] {
     flex-wrap: nowrap; padding: .3rem .4rem .3rem .9rem; margin-bottom: .1rem;
     background: rgba(255, 255, 255, 0.035); border: 1px solid var(--glass-border); border-radius: 10px;
@@ -450,7 +445,6 @@ div[class*="st-key-dlg_del_"] button {
 }
 div[class*="st-key-dlg_del_"] button:hover { color: #ff7a7a; background: rgba(255, 77, 77, 0.12); }
 
-/* nova tarefa: pílula com "+" à esquerda, descrição e prazo */
 div[class*="st-key-dlg_nova_tarefa"] {
     flex-wrap: nowrap; padding: .2rem .5rem .2rem .3rem; gap: .3rem;
     background: rgba(255, 255, 255, 0.04); border: 1px solid var(--glass-border); border-radius: 999px;
@@ -471,8 +465,7 @@ div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="input"],
 div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="base-input"] { border: none; background: transparent; box-shadow: none; }
 div[class*="st-key-dlg_nova_tarefa"] input { background: transparent; }
 
-/* ---------- Exportar / importar ---------- */
-/* botão discreto ao lado de "Nova meta": só o ícone, sem moldura, acende no hover */
+/* Exportar / importar */
 div[class*="st-key-metas_topo_acoes"] { flex-wrap: nowrap; }
 div[class*="st-key-io_menu"] { flex: none; width: auto; }
 div[class*="st-key-io_menu"] button {
@@ -483,12 +476,12 @@ div[class*="st-key-io_menu"] button:hover, div[class*="st-key-io_menu"] button[a
     background: var(--atlas-purple-soft); color: #fff;
 }
 div[class*="st-key-io_menu"] button [data-testid="stIconMaterial"] { font-size: 1.35rem; }
-div[class*="st-key-io_menu"] button > div > div[aria-hidden="true"] { display: none; }  /* seta do popover: o botão é só o ícone */
+div[class*="st-key-io_menu"] button > div > div[aria-hidden="true"] { display: none; }
 
-/* o menu fica aberto no navegador quando o diálogo abre (o servidor não fecha popover): esconde só ele */
+/* O servidor não fecha o popover quando o diálogo abre, então o menu continua aberto no navegador. Só
+   ele é escondido. */
 body:has(div[data-testid="stDialog"]) [data-testid="stPopoverBody"]:has([class*="st-key-io_exportar"]) { display: none; }
 
-/* duplicadas na importação: título, o que difere (atual → importada) e a escolha logo abaixo */
 .io-item { margin-top: .7rem; padding: .55rem .8rem; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--glass-border); border-radius: 10px; }
 .io-titulo { font-size: .92rem; font-weight: 600; }
 .io-prazo { margin-left: .6rem; color: var(--atlas-text-dim); font-size: .74rem; font-weight: 400; }
@@ -499,8 +492,8 @@ body:has(div[data-testid="stDialog"]) [data-testid="stPopoverBody"]:has([class*=
 .io-seta { color: #d39bff; }
 .io-ponto { width: 12px; height: 12px; vertical-align: middle; }
 
-/* ---------- Início ---------- */
-/* sai da coluna central e fica no canto superior esquerdo da área principal */
+/* Início */
+/* Sai da coluna central e vai para o canto superior esquerdo da área principal. */
 div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top: 1.1rem; left: 1.6rem; width: auto; }
 .home-clock { color: var(--atlas-text-dim); font-size: .85rem; }
 .home-clock .material-icon { font-size: 1rem; margin-right: .5rem; }
@@ -516,12 +509,12 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
     background: radial-gradient(circle, rgba(180, 76, 255, 0.14), transparent 70%);
     box-shadow: 0 0 40px rgba(180, 76, 255, 0.25), inset 0 0 30px rgba(180, 76, 255, 0.12);
 }
-/* drop-shadow segue o contorno do PNG transparente: o brilho envolve só o A */
+/* O drop-shadow segue o contorno do PNG transparente, então o brilho envolve só o A. */
 .home-hero img {
     display: block; margin: 0 auto 1.6rem auto; width: min(260px, 24vh); height: auto;
     filter: drop-shadow(0 0 6px rgba(180, 76, 255, 0.9)) drop-shadow(0 0 22px rgba(180, 76, 255, 0.6)) drop-shadow(0 0 48px rgba(180, 76, 255, 0.35));
 }
-/* o espaçamento entre letras também sobra depois da última: o recuo à esquerda recentraliza */
+/* O espaçamento entre letras também sobra depois da última; o recuo à esquerda recentraliza. */
 .home-hero h1 {
     font-size: 3.2rem; font-weight: 700; letter-spacing: .32em; padding: 0 0 0 .32em;
     margin: 0 0 .6rem 0; color: #fff; text-shadow: 0 0 28px rgba(180, 76, 255, 0.45);
@@ -530,13 +523,13 @@ div[data-testid="stElementContainer"]:has(.home-clock) { position: absolute; top
 
 .home-section-title { font-size: 1.15rem; font-weight: 500; margin: 1rem 0 .9rem 0; }
 .home-grid { display: grid; gap: 1.1rem; grid-template-columns: repeat(3, 1fr); margin-bottom: 2.2rem; }
-/* resumo: grade de 3 cartões (dois em HTML e o gráfico, que é um contêiner nativo por causa do seletor) */
+/* Grade de 3 cartões: dois em HTML e o gráfico, que é um contêiner nativo por causa do seletor. */
 div[class*="st-key-resumo_grid"] { display: grid; gap: 1.1rem; grid-template-columns: repeat(3, 1fr); margin-bottom: 2.2rem; }
-/* o fragmento envolve o cartão do gráfico em 3 camadas: dissolvê-las deixa o cartão como filho direto da grade */
+/* O fragmento envolve o cartão do gráfico em 3 camadas; dissolvê-las deixa o cartão como filho direto
+   da grade. */
 div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"],
 div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"],
 div[class*="st-key-resumo_grid"] > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] { display: contents; }
-/* os cartões em HTML acompanham a altura da linha */
 div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"],
 div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdown"],
 div[class*="st-key-resumo_grid"] > [data-testid="stElementContainer"] [data-testid="stMarkdown"] > div,
@@ -560,8 +553,9 @@ div[class*="st-key-tile_concluidas"] .tile-note { margin: 0; }
 .chart-legend b { color: #e4e4ee; font-weight: 600; }
 div[class*="st-key-tile_concluidas"] [data-testid="stElementToolbar"] { display: none; }
 
-/* gráfico de metas concluídas: movimento sutil (barras sobem em sequência, valores surgem, a barra atual respira).
-   Cada período do Vega é um g filho de .role-scope (a barra empilhada inteira cresce junto, a partir da base); o texto do SVG já tem transform próprio, então só ganha opacidade. */
+/* Movimento sutil no gráfico: as barras sobem em sequência, os valores surgem e a barra atual respira.
+   Cada período do Vega é um <g> filho de .role-scope, então a barra empilhada inteira cresce junto, a
+   partir da base. O texto do SVG já tem transform próprio e por isso só ganha opacidade. */
 @keyframes barra-sobe { from { transform: scaleY(0); opacity: 0; } }
 @keyframes valor-surge { from { opacity: 0; } }
 @keyframes barra-respira {
@@ -607,14 +601,15 @@ div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(11) .mark-rect.ro
 .tile-line { color: #c9c9d6; font-size: .88rem; margin: .45rem 0; }
 .mini-track { height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .mini-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); box-shadow: 0 0 8px rgba(180, 76, 255, 0.6); }
-/* blocos reservados: esqueleto no lugar do conteúdo futuro */
+/* Blocos reservados: esqueleto no lugar do conteúdo futuro. */
 .skel { height: 9px; border-radius: 999px; margin: .7rem 0 0; background: rgba(255, 255, 255, 0.07); }
 .skel.s1 { width: 88%; } .skel.s2 { width: 64%; } .skel.s3 { width: 76%; }
 .skel-bars { display: flex; align-items: flex-end; gap: 8px; height: 90px; margin-top: 1rem; }
 .skel-bars i { flex: 1; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, rgba(180, 76, 255, 0.45), rgba(180, 76, 255, 0.08)); }
 .soon { font-size: .72rem; color: var(--atlas-text-dim); border: 1px solid var(--glass-border); border-radius: 999px; padding: .1rem .6rem; }
 
-/* a sidebar ocupa ~290 px: abaixo de 1200 de janela, 3 colunas ficam estreitas (texto quebrando), então vão para 2 */
+/* A sidebar ocupa cerca de 290 px: abaixo de 1200 px de janela, 3 colunas ficam estreitas e o texto
+   quebra, então passam para 2. */
 @media (max-width: 1199px) {
     .home-grid, div[class*="st-key-resumo_grid"] { grid-template-columns: repeat(2, 1fr); }
     div[class*="st-key-tile_concluidas"] { grid-column: 1 / -1; }
@@ -628,4 +623,3 @@ div[class*="st-key-tile_concluidas"] .role-scope > g:nth-child(11) .mark-rect.ro
     div[class*="st-key-tile_concluidas"]::before, div[class*="st-key-tile_concluidas"] svg * { animation: none !important; }
     * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
-

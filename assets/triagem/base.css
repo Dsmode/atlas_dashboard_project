@@ -1,0 +1,50 @@
+/* Central de Triagem. Escala de espaçamento do módulo: 4, 8, 12, 16, 24, 32, 48 px. */
+:root { --tri-gap: 24px; }
+
+.st-key-tri_raiz, .st-key-tri_grade { gap: var(--tri-gap); }
+.st-key-tri_raiz [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+.st-key-tri_raiz .atlas-sub { margin-bottom: 0; }
+.st-key-tri_raiz > [data-testid="stElementContainer"]:first-child { margin-bottom: 8px; }
+.st-key-tri_grade [data-testid="stHorizontalBlock"] { gap: var(--tri-gap); }
+
+/* Cartões em vidro, no mesmo padrão do resto do ATLAS. */
+div[class*="st-key-tri_card_"], .st-key-tri_faixa_erro {
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid rgba(190, 120, 255, 0.24); border-radius: 18px;
+    box-shadow: var(--glass-shadow), 0 0 18px -8px rgba(180, 76, 255, 0.5);
+    padding: 24px; gap: 16px; height: 100%; box-sizing: border-box;
+}
+div[data-testid="stLayoutWrapper"]:has(> div[class*="st-key-tri_card_"]) { flex: 1; }
+.st-key-tri_faixa_erro {
+    border-color: rgba(255, 77, 77, 0.4); box-shadow: var(--glass-shadow), 0 0 18px -8px rgba(255, 77, 77, 0.5);
+}
+
+.tri-card-titulo { font-size: 1.125rem; font-weight: 600; line-height: 1.3; }
+.tri-texto { color: #c3c3d2; line-height: 1.5; max-width: 62ch; }
+.tri-texto.tri-vazio { color: var(--atlas-text-dim); }
+.tri-nota { color: var(--atlas-text-dim); font-size: .8125rem; margin-top: 4px; }
+.tri-erro-titulo { font-weight: 600; color: #ff7a7a; }
+.tri-erro-texto { color: #e1d9ee; margin-top: 4px; }
+.tri-erro-quando { color: var(--atlas-text-dim); font-size: .8125rem; margin-top: 4px; }
+
+/* Números do resumo da caixa. */
+.tri-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 16px; }
+.tri-stat strong {
+    display: block; font-size: 2.1rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 22px rgba(180, 76, 255, 0.55);
+}
+.tri-stat span { display: block; color: var(--atlas-text-dim); margin-top: 8px; }
+
+/* Botões do módulo: vidro que acende em roxo. */
+div[class*="st-key-tri_"] button:not([kind="primary"]) {
+    background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: #c9c9d6;
+    min-height: 0; height: 40px; border-radius: 12px; transition: border-color .2s, box-shadow .2s, color .2s;
+}
+div[class*="st-key-tri_"] button:not([kind="primary"]):hover {
+    border-color: rgba(180, 76, 255, 0.6); color: #fff; box-shadow: 0 0 14px rgba(180, 76, 255, 0.25);
+}
+div[class*="st-key-tri_"] button[kind="primary"] {
+    min-height: 0; height: 40px; border-radius: 12px; border: 0;
+    background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); color: #fff;
+}
+div[class*="st-key-tri_"] [data-testid="stProgress"] { margin: 4px 0; }

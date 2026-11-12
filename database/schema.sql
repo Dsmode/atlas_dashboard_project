@@ -112,3 +112,74 @@ CREATE TABLE IF NOT EXISTS fin_config (
     chave VARCHAR(40) PRIMARY KEY,
     valor VARCHAR(255) NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tri_config (
+    chave VARCHAR(40) PRIMARY KEY,
+    valor VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tri_marcadores (
+    id VARCHAR(80) PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL,
+    tipo ENUM('sistema', 'usuario') NOT NULL DEFAULT 'usuario'
+);
+
+CREATE TABLE IF NOT EXISTS tri_importacoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('completa', 'incremental') NOT NULL,
+    status ENUM('rodando', 'concluida', 'erro', 'interrompida') NOT NULL DEFAULT 'rodando',
+    fase TINYINT NOT NULL DEFAULT 1,
+    page_token VARCHAR(255) NULL,
+    total_estimado INT NOT NULL DEFAULT 0,
+    processados INT NOT NULL DEFAULT 0,
+    history_id_inicial VARCHAR(40) NULL,
+    pid INT NULL,
+    iniciada_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizada_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    finalizada_em DATETIME NULL,
+    mensagem_erro VARCHAR(500) NULL
+);
+
+CREATE TABLE IF NOT EXISTS tri_emails (
+    id VARCHAR(32) PRIMARY KEY,
+    thread_id VARCHAR(32) NOT NULL,
+    remetente_nome VARCHAR(255) NULL,
+    remetente_email VARCHAR(320) NULL,
+    dominio VARCHAR(255) NULL,
+    assunto VARCHAR(1000) NULL,
+    snippet VARCHAR(600) NULL,
+    data_email DATETIME NULL,
+    tamanho INT NOT NULL DEFAULT 0,
+    lido TINYINT(1) NOT NULL DEFAULT 0,
+    categoria VARCHAR(20) NULL,
+    list_unsubscribe TEXT NULL,
+    list_unsubscribe_post VARCHAR(255) NULL,
+    spf VARCHAR(20) NULL,
+    dkim VARCHAR(20) NULL,
+    dmarc VARCHAR(20) NULL,
+    auth_resultado VARCHAR(1500) NULL,
+    history_id VARCHAR(40) NULL,
+    importacao_id INT NULL,
+    atualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_tri_emails_remetente (remetente_email(191)),
+    INDEX idx_tri_emails_dominio (dominio(191)),
+    INDEX idx_tri_emails_data (data_email),
+    INDEX idx_tri_emails_categoria (categoria),
+    INDEX idx_tri_emails_importacao (importacao_id)
+);
+
+CREATE TABLE IF NOT EXISTS tri_email_marcadores (
+    email_id VARCHAR(32) NOT NULL,
+    marcador_id VARCHAR(80) NOT NULL,
+    PRIMARY KEY (email_id, marcador_id),
+    INDEX idx_tri_email_marcadores_marcador (marcador_id),
+    FOREIGN KEY (email_id) REFERENCES tri_emails (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tri_email_campos (
+    email_id VARCHAR(32) NOT NULL,
+    campo VARCHAR(40) NOT NULL,
+    valor VARCHAR(500) NOT NULL,
+    PRIMARY KEY (email_id, campo),
+    FOREIGN KEY (email_id) REFERENCES tri_emails (id) ON DELETE CASCADE
+);

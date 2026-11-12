@@ -13,7 +13,9 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 
 load_dotenv(BASE_DIR / ".env")
 
-DB_NAME = "atlas_db"
+# ATLAS_DB_NAME só existe para os testes: os processos que a tela abre em segundo plano precisam enxergar o mesmo
+# banco de teste que ela.
+DB_NAME = os.getenv("ATLAS_DB_NAME", "atlas_db")
 
 
 def _config(com_banco=True):

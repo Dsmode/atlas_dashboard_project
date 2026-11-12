@@ -4,7 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from database.connection import init_db
-from modules import financas, home, metas
+from modules import financas, home, metas, triagem
 from modules.metas.cartao import recolher_cartoes
 from modules.ui import corpo_ativo
 
@@ -29,6 +29,7 @@ MODULOS = {
     "Início": (":material/home:", home.render),
     "Metas Pessoais": (":material/flag:", metas.render),
     "Controle Financeiro": (":material/account_balance_wallet:", financas.render),
+    "Central de Triagem": (":material/inbox:", triagem.render),
 }
 
 

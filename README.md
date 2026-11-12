@@ -1,8 +1,8 @@
 # ATLAS
 
-Painel pessoal modular que roda no seu computador. A interface é um HUD em tema escuro, com roxo neon e fundo de vidro, e cada ferramenta vira um módulo no menu lateral. Por enquanto são três: Início, Metas Pessoais e Controle Financeiro.
+Painel pessoal modular que roda no seu computador. A interface é um HUD em tema escuro, com roxo neon e fundo de vidro, e cada ferramenta vira um módulo no menu lateral. Por enquanto são quatro: Início, Metas Pessoais, Controle Financeiro e Central de Triagem (em construção).
 
-Feito com Python 3.13, Streamlit e MySQL. Os dados ficam no seu próprio MySQL e nada sai da máquina.
+Feito com Python 3.13, Streamlit e MySQL. Os dados ficam no seu próprio MySQL e nada sai da máquina. A única conversa com a internet é a da Central de Triagem com a API do Gmail.
 
 ![Início do ATLAS](docs/screenshots/inicio.png)
 
@@ -44,6 +44,17 @@ A aba Importar lê extratos de conta e faturas de cartão em OFX.
 - Grava tudo ou nada, mantém um histórico e permite desfazer cada importação.
 - CSV e PDF ainda não são suportados.
 
+### Central de Triagem
+
+Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho é feito em fases; a primeira já está pronta:
+
+- Conexão com o Gmail por OAuth 2.0 com o escopo mínimo (`gmail.modify`, que não permite exclusão permanente). O token de renovação fica no Gerenciador de Credenciais do Windows e o `client_secret.json` fica fora do projeto, em `%LOCALAPPDATA%\ATLAS\gmail`.
+- Importação só de metadados (remetente, assunto, data, tamanho, marcadores, cabeçalhos de lista e autenticação, trecho curto). O corpo das mensagens não é baixado.
+- Primeira carga completa que pode ser pausada e retomada sem duplicar nada, e sincronização incremental pela history API.
+- Retry com espera crescente para limite de cota e falhas de rede. A importação roda num processo separado, com progresso na tela.
+
+Como criar o projeto no Google Cloud e autorizar o acesso: a própria tela da Central de Triagem mostra o passo a passo.
+
 ## Instalação (Windows 10 e 11)
 
 Pré-requisitos: Python 3.13 e MySQL Server em execução. Se o serviço estiver parado, use `net start MySQL80` em um terminal de administrador.
@@ -69,12 +80,16 @@ modules/
   home.py               tela inicial
   metas/                Metas Pessoais (cartão, diálogo, filtros, controles, exportar e importar)
   financas/             Controle Financeiro (dashboard, extrato, importar, configurações)
+  triagem/              Central de Triagem (conexão e importação)
   ui.py, graficos_base.py   peças de interface usadas por mais de um módulo
+integracoes/
+  gmail/                acesso ao Gmail: OAuth, cliente da API, retry e cota (sem banco e sem Streamlit)
 database/
   connection.py         conexão, criação do banco e migrações
   schema.sql            tabelas
   metas/                consultas, regra de progresso e exportação das metas
   financas/             consultas, cálculos, leitor de OFX, sugestões e regras da importação
+  triagem/              consultas, conversão dos metadados, importação completa e incremental, processo executor
   texto.py, dinheiro.py, cores.py, datas.py, arquivos.py   utilidades compartilhadas
 components/             componente do checklist com arrastar e soltar
 launcher/               janela própria (pywebview) e criador de atalho
@@ -87,7 +102,7 @@ Alguns pontos de projeto que valem saber:
 - Valores em dinheiro e quantidades usam `Decimal`, nunca `float`.
 - Todo texto que vem do usuário ou de um arquivo é escapado antes de ir para o HTML. Arquivos importados (JSON e OFX) são tratados como dados não confiáveis e validados antes de qualquer gravação.
 - As regras de negócio (progresso das metas, cálculos financeiros, leitura de OFX, sugestões) não dependem do Streamlit nem do banco, o que as deixa testáveis em separado.
-- Nenhuma credencial vai para o código. A conexão vem do `.env`.
+- Nenhuma credencial vai para o código. A conexão vem do `.env`; o token do Gmail, do Gerenciador de Credenciais do Windows.
 - A fonte e o fundo de rede ficam embutidos no app, então ele funciona sem internet.
 
 ## Criar um módulo novo
@@ -96,6 +111,7 @@ Crie `modules/<nome>.py` (ou um pacote, se for grande) com uma função `render(
 
 ## O que vem a seguir
 
+- Central de Triagem: extração de termos (TF-IDF), cards fixos e configuráveis com regras E, OU e NÃO, detecção de golpes, limpeza em lote com desfazer, desinscrição e triagem agendada dos e-mails novos.
 - Leitor de CSV para a importação e teste com OFX de outros bancos.
 - No Controle Financeiro: pago e a pagar, parcelas, exportar e importar dados, orçamento por categoria e um cartão financeiro no Início.
 - "Prazos próximos" do Início ligado às metas reais.

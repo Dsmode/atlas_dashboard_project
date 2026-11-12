@@ -5,3 +5,7 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 *.log
+client_secret*.json
+credentials*.json
+token*.json
+*.token

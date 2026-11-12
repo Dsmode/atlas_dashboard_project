@@ -13,6 +13,8 @@ from database.triagem import repo
 from database.triagem.estado import estado_importacao, fmt_int
 from integracoes.gmail import autenticacao, config
 
+from . import cards, protegidos, termos
+
 RAIZ = Path(__file__).resolve().parents[2]
 CSS_DIR = RAIZ / "assets" / "triagem"
 GUIA_CLOUD = "https://console.cloud.google.com/"
@@ -284,6 +286,18 @@ def _conta():
             st.button("Desconectar o Gmail", key="tri_desconectar", on_click=_desconectar)
 
 
+SECOES = ("Cards", "Explorar termos", "Protegidos", "Caixa e conta")
+
+
+def _caixa_e_conta():
+    with st.container(horizontal=False, key="tri_grade"):
+        colunas = st.columns(2)
+        with colunas[0]:
+            _resumo_caixa()
+        with colunas[1]:
+            _conta()
+
+
 def render():
     st.session_state.pop("tri_rerun", None)
     _css()
@@ -299,9 +313,13 @@ def render():
         else:
             ativo = repo.em_execucao() or _iniciando()
             st.fragment(run_every=2 if ativo else None)(_painel_importacao)()
-            with st.container(horizontal=False, key="tri_grade"):
-                colunas = st.columns(2)
-                with colunas[0]:
-                    _resumo_caixa()
-                with colunas[1]:
-                    _conta()
+            secao = st.segmented_control("Seção", SECOES, default=SECOES[0], key="tri_secao",
+                                         label_visibility="collapsed") or SECOES[0]
+            if secao == "Cards":
+                cards.secao()
+            elif secao == "Explorar termos":
+                termos.secao()
+            elif secao == "Protegidos":
+                protegidos.secao()
+            else:
+                _caixa_e_conta()

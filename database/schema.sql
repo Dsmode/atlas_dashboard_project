@@ -183,3 +183,14 @@ CREATE TABLE IF NOT EXISTS tri_email_campos (
     PRIMARY KEY (email_id, campo),
     FOREIGN KEY (email_id) REFERENCES tri_emails (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS tri_ruido (
+    termo VARCHAR(120) PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS tri_protegidos (
+    valor VARCHAR(320) PRIMARY KEY,
+    tipo ENUM('dominio', 'email') NOT NULL,
+    origem ENUM('padrao', 'usuario') NOT NULL DEFAULT 'usuario',
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

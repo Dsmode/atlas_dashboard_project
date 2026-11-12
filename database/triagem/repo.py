@@ -175,3 +175,79 @@ def em_execucao():
     with get_cursor() as cur:
         cur.execute("SELECT IS_FREE_LOCK(%s) AS livre", (nome_trava(),))
         return cur.fetchone()["livre"] == 0
+
+
+# ---------- leitura para classificar e analisar ----------
+
+def emails_para_classificar():
+    """Uma linha por e-mail, só com o que a classificação usa. `spam` e `enviado` vêm dos marcadores do Gmail."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT e.id, e.remetente_nome, e.remetente_email, e.dominio, e.assunto, e.snippet, e.lido, e.categoria, "
+            "e.spf, e.dkim, e.dmarc, (e.list_unsubscribe IS NOT NULL AND e.list_unsubscribe <> '') AS tem_cancelamento, "
+            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SPAM') AS spam, "
+            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SENT') AS enviado "
+            "FROM tri_emails e"
+        )
+        linhas = cur.fetchall()
+    for l in linhas:
+        l["lido"], l["tem_cancelamento"] = bool(l["lido"]), bool(l["tem_cancelamento"])
+        l["spam"], l["enviado"] = bool(l["spam"]), bool(l["enviado"])
+    return linhas
+
+
+# ---------- palavras ignoradas (ruído) ----------
+
+def listar_ruido():
+    with get_cursor() as cur:
+        cur.execute("SELECT termo FROM tri_ruido ORDER BY termo")
+        return [l["termo"] for l in cur.fetchall()]
+
+
+def substituir_ruido(termos):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM tri_ruido")
+        if termos:
+            cur.executemany("INSERT IGNORE INTO tri_ruido (termo) VALUES (%s)", [(t[:120],) for t in termos])
+
+
+def adicionar_ruido(termos):
+    if termos:
+        with get_cursor() as cur:
+            cur.executemany("INSERT IGNORE INTO tri_ruido (termo) VALUES (%s)", [(t[:120],) for t in termos])
+
+
+# ---------- protegidos ----------
+
+def garantir_protegidos_padrao(padrao):
+    """Semeia a lista só na primeira vez; depois o usuário manda (se remover um padrão, ele não volta)."""
+    if obter_config("protegidos_semeados"):
+        return
+    with get_cursor() as cur:
+        cur.executemany(
+            "INSERT IGNORE INTO tri_protegidos (valor, tipo, origem) VALUES (%s, 'dominio', 'padrao')",
+            [(v,) for v in padrao],
+        )
+    gravar_config("protegidos_semeados", "1")
+
+
+def listar_protegidos():
+    with get_cursor() as cur:
+        cur.execute("SELECT valor, tipo, origem FROM tri_protegidos ORDER BY tipo, valor")
+        return cur.fetchall()
+
+
+def adicionar_protegidos(itens):
+    """`itens`: pares (tipo, valor)."""
+    if itens:
+        with get_cursor() as cur:
+            cur.executemany(
+                "INSERT IGNORE INTO tri_protegidos (valor, tipo, origem) VALUES (%s, %s, 'usuario')",
+                [(valor[:320], tipo) for tipo, valor in itens],
+            )
+
+
+def remover_protegidos(valores):
+    if valores:
+        with get_cursor() as cur:
+            cur.executemany("DELETE FROM tri_protegidos WHERE valor = %s", [(v,) for v in valores])

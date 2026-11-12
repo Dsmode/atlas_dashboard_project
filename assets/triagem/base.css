@@ -48,3 +48,52 @@ div[class*="st-key-tri_"] button[kind="primary"] {
     background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); color: #fff;
 }
 div[class*="st-key-tri_"] [data-testid="stProgress"] { margin: 4px 0; }
+
+/* Navegação entre seções. */
+.st-key-tri_secao [data-testid="stSegmentedControl"] { gap: 8px; }
+.st-key-tri_secao button { height: 40px; padding: 0 16px; }
+
+/* Cards fixos (cor de cada card em --tri-cor). */
+.st-key-tri_card_lixo, .st-key-tri_card_lixo_detalhe { --tri-cor: #ff4d4d; }
+.st-key-tri_card_spam, .st-key-tri_card_spam_detalhe { --tri-cor: #ff5fa8; }
+.st-key-tri_card_revisar, .st-key-tri_card_revisar_detalhe { --tri-cor: #ffb02e; }
+.st-key-tri_card_lixo, .st-key-tri_card_spam, .st-key-tri_card_revisar {
+    border-top: 2px solid var(--tri-cor); box-shadow: var(--glass-shadow), 0 0 22px -10px var(--tri-cor);
+}
+.st-key-tri_card_lixo_detalhe, .st-key-tri_card_spam_detalhe, .st-key-tri_card_revisar_detalhe {
+    border-top: 2px solid var(--tri-cor);
+}
+.tri-th { display: flex; align-items: center; gap: 12px; }
+.tri-ico {
+    width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none;
+    color: var(--tri-cor); background: color-mix(in srgb, var(--tri-cor) 14%, transparent);
+}
+.tri-ico svg { width: 22px; height: 22px; }
+.tri-th .tri-nota { margin-top: 0; }
+.tri-contagem strong {
+    display: block; font-size: 2.1rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.tri-contagem span { display: block; color: var(--atlas-text-dim); margin-top: 8px; }
+.tri-remetentes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tri-remetentes li {
+    display: flex; justify-content: space-between; gap: 16px; font-size: .875rem; color: #c3c3d2;
+    padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.tri-remetentes li:last-child { border-bottom: 0; padding-bottom: 0; }
+.tri-remetentes li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tri-remetentes li span:last-child { font-variant-numeric: tabular-nums; color: #fff; }
+.tri-remetentes li.tri-vazio { color: var(--atlas-text-dim); }
+
+/* Termos e grupos. */
+.tri-secao-titulo { font-size: 1.125rem; font-weight: 600; }
+.tri-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tri-chip {
+    padding: 4px 12px; border-radius: 999px; font-size: .875rem; color: #e1d9ee;
+    background: rgba(180, 76, 255, 0.14); border: 1px solid rgba(190, 120, 255, 0.3);
+}
+.st-key-tri_barra_termos, .st-key-tri_barra_protegidos { gap: 16px; }
+.st-key-tri_card_lixo > [data-testid="stElementContainer"]:first-child,
+.st-key-tri_card_spam > [data-testid="stElementContainer"]:first-child,
+.st-key-tri_card_revisar > [data-testid="stElementContainer"]:first-child { flex: 1; }
+.tri-contagem { margin-top: 24px; }
+.tri-remetentes { margin-top: 24px; }

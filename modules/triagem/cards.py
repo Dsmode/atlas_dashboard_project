@@ -1,36 +1,41 @@
-"""Seção "Cards": a grade com os três cards fixos e a lista de remetentes de cada um."""
+"""Seção "Cards": a grade (três cards fixos, cards do usuário e "Novo card"), a lista de remetentes de cada um, a
+explicação por e-mail e a correção que ensina."""
 from html import escape
 
 import pandas as pd
 import streamlit as st
 
 from database.triagem import classificacao as cl
-from database.triagem import repo
+from database.triagem import regras, repo
 from database.triagem.estado import fmt_int
 
-from . import dados
+from . import dados, editor
 
 ICONES = {  # traços do conjunto Lucide (mesmo estilo do mockup aprovado)
     "trash": '<path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14M10 11v6m4-6v6"/>',
     "shield": '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M12 8v4m0 3v.01"/>',
     "eye": '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    "tag": '<path d="M20 13l-7 7-9-9V4h7z"/><circle cx="8.5" cy="8.5" r="1"/>',
 }
 CARDS = {
     cl.LIXO: {"titulo": "Lixo", "subtitulo": "Sinais automáticos", "icone": "trash", "tom": "lixo"},
     cl.SUSPEITO: {"titulo": "Spam e suspeitos", "subtitulo": "Alerta automático", "icone": "shield", "tom": "spam"},
     cl.REVISAR: {"titulo": "Revisar", "subtitulo": "O sistema ficou em dúvida", "icone": "eye", "tom": "revisar"},
 }
+NOMES_FIXOS = {cl.LIXO: "Lixo", cl.SUSPEITO: "Spam e suspeitos", cl.REVISAR: "Revisar", cl.PROTEGIDO: "Protegido"}
 EXPLICACAO = {
     cl.LIXO: "Promoções e redes sociais que você nunca abriu (de quem oferece cancelar a inscrição) e remetentes "
-             "que mandam muito e você quase não lê.",
+             "que mandam muito e você quase não lê. E-mails com uma palavra que salva ficam em Revisar.",
     cl.SUSPEITO: "Marcados como spam pelo Gmail, com falha de autenticação (SPF, DKIM, DMARC) ou imitando o nome ou "
                  "o domínio de um remetente protegido.",
     cl.REVISAR: "E-mails não lidos que não casaram com nenhum sinal claro. Se o remetente é confiável, proteja-o.",
 }
+MAX_EMAILS_DO_REMETENTE = 100
 
 
 def _icone(nome):
-    return f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{ICONES[nome]}</svg>'
+    return (f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+            f'stroke-linejoin="round">{ICONES[nome]}</svg>')
 
 
 def _plural(n, singular, plural):
@@ -45,36 +50,68 @@ def _voltar():
     st.session_state.pop("tri_aberto", None)
 
 
-def _tile(card, resumo):
-    info, dados_card = CARDS[card], resumo[card]
-    topo = "".join(
-        f'<li><span>{escape(remetente)}</span><span>{fmt_int(n)}</span></li>' for remetente, n in dados_card["top"]
+def _topo(resumo):
+    return "".join(
+        f'<li><span>{escape(remetente)}</span><span>{fmt_int(n)}</span></li>' for remetente, n in resumo["top"]
     ) or '<li class="tri-vazio"><span>Nenhum e-mail aqui.</span></li>'
+
+
+def _cabecalho_tile(titulo, subtitulo, icone, resumo):
+    return (
+        f'<div class="tri-th"><div class="tri-ico">{_icone(icone)}</div>'
+        f'<div><div class="tri-card-titulo">{escape(titulo)}</div><div class="tri-nota">{escape(subtitulo)}</div></div>'
+        f'</div><div class="tri-contagem"><strong>{fmt_int(resumo["emails"])}</strong>'
+        f'<span>{_plural(resumo["emails"], "e-mail", "e-mails")} de '
+        f'{_plural(resumo["remetentes"], "remetente", "remetentes")}</span></div>'
+        f'<ul class="tri-remetentes">{_topo(resumo)}</ul>')
+
+
+def _tile_fixo(card, resumo):
+    info, dados_card = CARDS[card], resumo[card]
     with st.container(key=f"tri_card_{info['tom']}"):
-        st.markdown(
-            f'<div class="tri-th"><div class="tri-ico">{_icone(info["icone"])}</div>'
-            f'<div><div class="tri-card-titulo">{info["titulo"]}</div>'
-            f'<div class="tri-nota">{info["subtitulo"]}</div></div></div>'
-            f'<div class="tri-contagem"><strong>{fmt_int(dados_card["emails"])}</strong>'
-            f'<span>{_plural(dados_card["emails"], "e-mail", "e-mails")} de '
-            f'{_plural(dados_card["remetentes"], "remetente", "remetentes")}</span></div>'
-            f'<ul class="tri-remetentes">{topo}</ul>', unsafe_allow_html=True)
+        st.markdown(_cabecalho_tile(info["titulo"], info["subtitulo"], info["icone"], dados_card),
+                    unsafe_allow_html=True)
         st.button("Abrir", key=f"tri_abrir_{card}", icon=":material/arrow_forward:", on_click=_abrir, args=(card,),
                   disabled=not dados_card["emails"])
 
 
+def _tile_usuario(card, resumo):
+    cor = editor.CORES.get(card["cor"], editor.CORES["teal"])
+    subtitulo = "Regra sua" + (" · entra no resumo" if card["entra_no_resumo"] else "")
+    with st.container(key=f"tri_card_u{card['id']}"):
+        st.markdown(f'<style>.st-key-tri_card_u{card["id"]}{{--tri-cor:{cor};}}</style>'
+                    + _cabecalho_tile(card["nome"], subtitulo, "tag", resumo), unsafe_allow_html=True)
+        with st.container(horizontal=True, gap="small"):
+            st.button("Abrir", key=f"tri_abrir_u{card['id']}", icon=":material/arrow_forward:", on_click=_abrir,
+                      args=(card["id"],), disabled=not resumo["emails"])
+            st.button("Editar regra", key=f"tri_editar_u{card['id']}", on_click=editor.editar, args=(card,))
+
+
+def _tile_novo():
+    with st.container(key="tri_card_novo"):
+        st.markdown('<div class="tri-card-titulo">Novo card</div><div class="tri-texto">Crie uma regra com critérios '
+                    'E, OU e NÃO, com prévia ao vivo. Também dá para partir de um grupo de termos.</div>',
+                    unsafe_allow_html=True)
+        st.button("Criar card", key="tri_novo_card", type="primary", icon=":material/add:", on_click=editor.novo)
+
+
 def _grade(caixa):
-    colunas = st.columns(3)
-    for coluna, card in zip(colunas, CARDS, strict=True):
-        with coluna:
-            _tile(card, caixa["resumo"])
+    tiles = [(_tile_fixo, (c, caixa["resumo"])) for c in CARDS]
+    tiles += [(_tile_usuario, (c, caixa["resumo_cards"][c["id"]])) for c in caixa["cards"]]
+    tiles.append((_tile_novo, ()))
+    for inicio in range(0, len(tiles), 3):
+        for coluna, (desenhar, args) in zip(st.columns(3), tiles[inicio:inicio + 3], strict=False):
+            with coluna:
+                desenhar(*args)
     protegidos = caixa["resumo"][cl.PROTEGIDO]
     st.markdown(
         f'<div class="tri-nota">{_plural(protegidos["emails"], "e-mail", "e-mails")} de '
-        f'{_plural(protegidos["remetentes"], "remetente protegido", "remetentes protegidos")} ficam fora dos cards. '
-        'Um e-mail só cai em um card; as regras que você criar entrarão antes dos sinais automáticos.</div>',
-        unsafe_allow_html=True)
+        f'{_plural(protegidos["remetentes"], "remetente protegido", "remetentes protegidos")} ficam fora de Lixo e '
+        'Revisar. Prioridade: spam e suspeitos, depois protegidos, depois as regras dos seus cards, depois os sinais '
+        'automáticos. Um e-mail pode estar em vários cards seus.</div>', unsafe_allow_html=True)
 
+
+# ---------- lista de remetentes de um card ----------
 
 def _proteger(linhas, indices, por):
     itens = []
@@ -84,16 +121,66 @@ def _proteger(linhas, indices, por):
     repo.adicionar_protegidos([i for i in itens if i[1] and i[1] != "(sem remetente)"])
 
 
-def _detalhe(card, caixa):
-    info = CARDS[card]
+def _ensinar(remetentes, card_id, operador):
+    """A correção ensina: o remetente entra (OU) ou sai (NÃO) da regra do card, por e-mail exato."""
+    for remetente in remetentes:
+        repo.adicionar_criterio(card_id, operador, "email", remetente)
+    dados.renovar_tabelas()
+
+
+def _por_que_do_email(caixa, e):
+    partes = []
+    fixo = caixa["classificacao"].get(e["id"])
+    if fixo:
+        partes.append(f"{NOMES_FIXOS[fixo[0]]}: {fixo[1]}")
+    for c in caixa["cards"]:
+        if e["id"] in caixa["membros"][c["id"]]:
+            partes.append(f"{c['nome']}: " + "; ".join(regras.motivos(c["criterios"], caixa["preparados"][e["id"]])))
+    return " | ".join(partes) or "Fora de todos os cards (lido ou sem sinal)"
+
+
+def _emails_do_remetente(caixa, remetente):
+    """Por que cada e-mail do remetente caiu onde caiu."""
+    st.markdown(f'<div class="tri-secao-titulo">E-mails de {escape(remetente)}</div>', unsafe_allow_html=True)
+    emails = sorted((e for e in caixa["emails"] if (e["remetente_email"] or "").lower() == remetente and not e["enviado"]),
+                    key=lambda e: e["data_email"] or 0, reverse=True)
+    mostrados = emails[:MAX_EMAILS_DO_REMETENTE]
+    st.dataframe(
+        pd.DataFrame({
+            "Data": [e["data_email"].strftime("%d/%m/%Y") if e["data_email"] else "" for e in mostrados],
+            "Assunto": [e["assunto"] or "(sem assunto)" for e in mostrados],
+            "Lido": ["sim" if e["lido"] else "não" for e in mostrados],
+            "Por quê": [_por_que_do_email(caixa, e) for e in mostrados],
+        }), hide_index=True, width="stretch", height=min(420, 50 + 35 * len(mostrados)),
+        column_config={"Data": st.column_config.TextColumn(width=90), "Lido": st.column_config.TextColumn(width=60),
+                       "Assunto": st.column_config.TextColumn(width=260), "Por quê": st.column_config.TextColumn()})
+    if len(emails) > len(mostrados):
+        st.markdown(f'<div class="tri-nota">Mostrando os {MAX_EMAILS_DO_REMETENTE} mais recentes de '
+                    f'{fmt_int(len(emails))}.</div>', unsafe_allow_html=True)
+
+
+def _contexto_do_card(caixa, aberto):
+    """(título, texto de apoio, tom do CSS, ids, função de motivo, card do usuário ou None)."""
+    if aberto in CARDS:
+        info = CARDS[aberto]
+        ids = {i for i, (c, _) in caixa["classificacao"].items() if c == aberto}
+        return info["titulo"], EXPLICACAO[aberto], info["tom"], ids, (lambda e: caixa["classificacao"][e["id"]][1]), None
+    card = next(c for c in caixa["cards"] if c["id"] == aberto)
+    regra = "; ".join(regras.descrever(c) for c in card["criterios"] if c["operador"] != "nao")
+    return (card["nome"], f"Regra sua: {regra}.", f"u{aberto}", caixa["membros"][aberto],
+            (lambda e: "; ".join(regras.motivos(card["criterios"], caixa["preparados"][e["id"]]))), card)
+
+
+def _detalhe(aberto, caixa):
+    titulo, apoio, tom, ids, motivo_de, card_usuario = _contexto_do_card(caixa, aberto)
     st.button("Voltar aos cards", key="tri_voltar", icon=":material/arrow_back:", on_click=_voltar)
-    linhas = cl.remetentes_do_card(caixa["emails"], caixa["classificacao"], card)
-    total = sum(l["emails"] for l in linhas)
-    with st.container(key=f"tri_card_{info['tom']}_detalhe"):
+    linhas = cl.remetentes_de(caixa["emails"], ids, motivo_de)
+    with st.container(key=f"tri_card_{tom}_detalhe"):
         st.markdown(
-            f'<div class="tri-card-titulo">{info["titulo"]}</div>'
-            f'<div class="tri-texto">{_plural(total, "e-mail", "e-mails")} de {_plural(len(linhas), "remetente", "remetentes")}, '
-            f'do maior volume para o menor. {EXPLICACAO[card]}</div>', unsafe_allow_html=True)
+            f'<div class="tri-card-titulo">{escape(titulo)}</div>'
+            f'<div class="tri-texto">{_plural(len(ids), "e-mail", "e-mails")} de '
+            f'{_plural(len(linhas), "remetente", "remetentes")}, do maior volume para o menor. {escape(apoio)}</div>',
+            unsafe_allow_html=True)
         if not linhas:
             st.markdown('<div class="tri-texto tri-vazio">Nenhum e-mail neste card.</div>', unsafe_allow_html=True)
             return
@@ -104,7 +191,7 @@ def _detalhe(card, caixa):
         })
         evento = st.dataframe(
             tabela, hide_index=True, width="stretch", height=min(560, 50 + 35 * len(tabela)), on_select="rerun",
-            selection_mode="multi-row", key=dados.chave_tabela(f"tri_tabela_{card}"),
+            selection_mode="multi-row", key=dados.chave_tabela(f"tri_tabela_{aberto}"),
             column_config={
                 "Nome": st.column_config.TextColumn(width=120),
                 "Remetente": st.column_config.TextColumn(width=200),
@@ -113,32 +200,57 @@ def _detalhe(card, caixa):
                 "Por quê": st.column_config.TextColumn(width="large"),
             })
         escolhidos = list(evento.selection.rows)
-        if card == cl.SUSPEITO:
-            st.markdown('<div class="tri-nota">Marcar como golpe e mover para a lixeira chegam na próxima etapa. '
-                        'Por enquanto, confira os motivos. Se for um engano, selecione e proteja o remetente.</div>',
-                        unsafe_allow_html=True)
-        with st.container(horizontal=True, gap="small"):
-            for rotulo, por, chave in (("Proteger remetente", "email", "tri_prot_email"),
-                                       ("Proteger domínio", "dominio", "tri_prot_dominio")):
-                if st.button(rotulo, key=chave, icon=":material/verified_user:", disabled=not escolhidos):
-                    _proteger(linhas, escolhidos, por)
-                    dados.renovar_tabelas()
-                    st.rerun()
-        st.markdown('<div class="tri-nota">Protegido não entra em Lixo nem em Revisar e não é movido em lote. '
-                    'Se o e-mail de um protegido falhar na verificação DMARC, ele continua indo para Spam e '
-                    'suspeitos (pode ser forjado).</div>', unsafe_allow_html=True)
+        _acoes(caixa, aberto, linhas, escolhidos, card_usuario)
+        if len(escolhidos) == 1:
+            _emails_do_remetente(caixa, linhas[escolhidos[0]]["remetente"])
+        else:
+            st.markdown('<div class="tri-nota">Selecione um remetente para ver, e-mail por e-mail, por que cada um '
+                        'caiu aqui.</div>', unsafe_allow_html=True)
+
+
+def _acoes(caixa, aberto, linhas, escolhidos, card_usuario):
+    remetentes = [linhas[i]["remetente"] for i in escolhidos]
+    if aberto == cl.SUSPEITO:
+        st.markdown('<div class="tri-nota">Marcar como golpe e mover para a lixeira chegam na próxima etapa. Por '
+                    'enquanto, confira os motivos. Se for um engano, proteja o remetente.</div>', unsafe_allow_html=True)
+    with st.container(horizontal=True, gap="small", vertical_alignment="bottom"):
+        for rotulo, por, chave in (("Proteger remetente", "email", "tri_prot_email"),
+                                   ("Proteger domínio", "dominio", "tri_prot_dominio")):
+            if st.button(rotulo, key=chave, icon=":material/verified_user:", disabled=not escolhidos):
+                _proteger(linhas, escolhidos, por)
+                dados.renovar_tabelas()
+                st.rerun()
+        if card_usuario:
+            st.button("Tirar deste card", key="tri_tirar", icon=":material/remove_circle:", disabled=not escolhidos,
+                      on_click=_ensinar, args=(remetentes, card_usuario["id"], "nao"))
+    outros = [c for c in caixa["cards"] if not card_usuario or c["id"] != card_usuario["id"]]
+    if outros:
+        with st.container(horizontal=True, gap="small", vertical_alignment="bottom"):
+            destino = st.selectbox("Mandar para o card", outros, format_func=lambda c: c["nome"], key="tri_destino",
+                                   disabled=not escolhidos)
+            st.button("Ensinar", key="tri_ensinar", icon=":material/school:", disabled=not escolhidos,
+                      on_click=_ensinar, args=(remetentes, destino["id"], "ou"),
+                      help="Acrescenta o e-mail do remetente como critério OU na regra do card escolhido.")
+    st.markdown('<div class="tri-nota">Protegido não entra em Lixo nem em Revisar e não é movido em lote. Se o '
+                'e-mail de um protegido falhar no DMARC, ele vai para Spam e suspeitos (pode ser forjado). "Ensinar" '
+                'e "Tirar deste card" mudam a regra do card; você pode revisá-las em Editar regra.</div>',
+                unsafe_allow_html=True)
 
 
 def secao():
     caixa = dados.caixa(dados.versao())
+    if "tri_rascunho" in st.session_state:
+        editor.secao()
+        return
     if not caixa["emails"]:
         with st.container(key="tri_card_vazio"):
             st.markdown('<div class="tri-card-titulo">Os cards aparecem depois da importação</div>'
                         '<div class="tri-texto">Assim que os primeiros e-mails chegarem, eles são separados em '
-                        'Lixo, Spam e suspeitos e Revisar.</div>', unsafe_allow_html=True)
+                        'Lixo, Spam e suspeitos e Revisar. Você também poderá criar os seus.</div>',
+                        unsafe_allow_html=True)
         return
     aberto = st.session_state.get("tri_aberto")
-    if aberto in CARDS:
+    if aberto in CARDS or aberto in {c["id"] for c in caixa["cards"]}:
         _detalhe(aberto, caixa)
     else:
         _grade(caixa)

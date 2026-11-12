@@ -67,7 +67,7 @@ def executar(criar_cliente=ClienteGmail.conectar):
         _registrar_erro("autorizacao", erro)
         log.warning("Autorização necessária: %s", config.sem_segredos(erro))
         return SEM_AUTORIZACAO
-    except Exception as erro:
+    except Exception as erro:  # noqa: BLE001  (limite do processo: qualquer falha vira erro registrado)
         _registrar_erro("geral", erro)
         log.error("Falha na sincronização: %s", config.sem_segredos(erro))
         return ERRO

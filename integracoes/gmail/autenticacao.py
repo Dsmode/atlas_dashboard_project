@@ -144,7 +144,7 @@ def main(argv):
     _registrar_resultado(estado="aguardando")
     try:
         _registrar_resultado(estado="ok", email=conectar())
-    except Exception as erro:
+    except Exception as erro:  # noqa: BLE001  (limite do processo: qualquer falha vira erro registrado)
         _registrar_resultado(estado="erro", erro=config.sem_segredos(erro)[:300])
         return 1
     return 0

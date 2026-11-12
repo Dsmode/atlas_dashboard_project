@@ -1,37 +1,53 @@
 """Leituras e cálculos da Central de Triagem guardados em cache. O cache vale enquanto a caixa e as listas do
-usuário não mudam (a "versão" muda com a sincronização, os protegidos e as palavras ignoradas)."""
+usuário não mudam (a "versão" muda com a sincronização, os protegidos, as palavras ignoradas e que salvam e os cards)."""
 import hashlib
+import json
 
 import streamlit as st
 
-from database.triagem import classificacao, repo, tfidf
+from database.triagem import classificacao, regras, repo, tfidf
 
 
 def versao():
-    """Muda quando a caixa, os protegidos ou as palavras ignoradas mudam."""
+    """Muda quando a caixa, os protegidos, as palavras ou os cards mudam."""
     dados = repo.resumo()
-    protegidos = "|".join(sorted(p["valor"] for p in repo.listar_protegidos()))
-    ruido = "|".join(repo.listar_ruido())
-    assinatura = f"{dados['total']}|{dados['nao_lidos']}|{repo.obter_config('ultima_sincronizacao')}|{protegidos}|{ruido}"
+    assinatura = json.dumps([
+        dados["total"], str(dados["nao_lidos"]), repo.obter_config("ultima_sincronizacao"),
+        sorted(p["valor"] for p in repo.listar_protegidos()), repo.listar_ruido(), repo.listar_palavras_salvam(),
+        repo.listar_cards(),
+    ], sort_keys=True, default=str)
     return hashlib.md5(assinatura.encode("utf-8")).hexdigest()
 
 
 @st.cache_data(show_spinner=False, max_entries=3)
 def caixa(chave):
-    """Todos os e-mails, a classificação de cada um e o resumo dos cards."""
+    """Todos os e-mails, a classificação de cada um, os cards do usuário e o resumo de todos os cards."""
     repo.garantir_protegidos_padrao(classificacao.PROTEGIDOS_PADRAO)
+    repo.garantir_palavras_salvam_padrao(classificacao.PALAVRAS_SALVAM_PADRAO)
     protegidos = {p["valor"] for p in repo.listar_protegidos()}
     emails = repo.emails_para_classificar()
-    resultado = classificacao.classificar(emails, protegidos)
+    preparados = {e["id"]: regras.preparar(e) for e in emails if not e["enviado"]}
+    cards = repo.listar_cards()
+    salvam = [regras.sem_acento(p) for p in repo.listar_palavras_salvam()]
+    resultado = classificacao.classificar(
+        emails, protegidos, classificacao.ids_que_casam_com_algum(cards, preparados), salvam, preparados)
+    membros = classificacao.membros_dos_cards(cards, preparados, resultado)
     return {
-        "emails": emails, "classificacao": resultado, "resumo": classificacao.resumo_por_card(emails, resultado),
+        "emails": emails, "preparados": preparados, "classificacao": resultado, "cards": cards, "membros": membros,
+        "resumo": classificacao.resumo_por_card(emails, resultado),
+        "resumo_cards": {c["id"]: classificacao.resumo_de_ids(emails, membros[c["id"]]) for c in cards},
         "protegidos": sorted(protegidos),
     }
 
 
+def cards_do_email(caixa_dados, email_id):
+    """Nomes dos cards do usuário em que o e-mail está."""
+    return [c["nome"] for c in caixa_dados["cards"] if email_id in caixa_dados["membros"][c["id"]]]
+
+
 @st.cache_data(show_spinner=False, max_entries=6)
 def termos(chave, filtro):
-    """Termos e grupos de termos dos e-mails do `filtro` ("todos" ou o nome de um card)."""
+    """Termos e grupos de termos dos e-mails do `filtro` ("todos" ou o nome de um card fixo)."""
     dados = caixa(chave)
     selecionados = [
         e for e in dados["emails"]

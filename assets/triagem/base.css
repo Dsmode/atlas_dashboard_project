@@ -97,3 +97,12 @@ div[class*="st-key-tri_"] [data-testid="stProgress"] { margin: 4px 0; }
 .st-key-tri_card_revisar > [data-testid="stElementContainer"]:first-child { flex: 1; }
 .tri-contagem { margin-top: 24px; }
 .tri-remetentes { margin-top: 24px; }
+
+/* Cards do usuário, editor e prévia. */
+div[class*="st-key-tri_card_u"]:not([class*="_detalhe"]) { border-top: 2px solid var(--tri-cor); box-shadow: var(--glass-shadow), 0 0 22px -10px var(--tri-cor); }
+div[class*="st-key-tri_card_u"][class*="_detalhe"] { border-top: 2px solid var(--tri-cor); }
+.st-key-tri_card_novo { border-style: dashed; justify-content: center; }
+.st-key-tri_card_editor, .st-key-tri_card_previa { height: auto; }
+.st-key-tri_card_previa { position: sticky; top: 16px; }
+.st-key-tri_card_editor .tri-secao-titulo { margin-top: 16px; }
+.st-key-tri_ed_acoes { margin-top: 8px; }

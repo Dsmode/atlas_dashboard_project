@@ -183,7 +183,7 @@ def emails_para_classificar():
     """Uma linha por e-mail, só com o que a classificação usa. `spam` e `enviado` vêm dos marcadores do Gmail."""
     with get_cursor() as cur:
         cur.execute(
-            "SELECT e.id, e.remetente_nome, e.remetente_email, e.dominio, e.assunto, e.snippet, e.lido, e.categoria, "
+            "SELECT e.id, e.remetente_nome, e.remetente_email, e.dominio, e.assunto, e.snippet, e.data_email, e.lido, e.categoria, "
             "e.spf, e.dkim, e.dmarc, (e.list_unsubscribe IS NOT NULL AND e.list_unsubscribe <> '') AS tem_cancelamento, "
             "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SPAM') AS spam, "
             "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SENT') AS enviado "
@@ -251,3 +251,82 @@ def remover_protegidos(valores):
     if valores:
         with get_cursor() as cur:
             cur.executemany("DELETE FROM tri_protegidos WHERE valor = %s", [(v,) for v in valores])
+
+
+# ---------- palavras que salvam ----------
+
+def garantir_palavras_salvam_padrao(padrao):
+    if obter_config("salvam_semeadas"):
+        return
+    with get_cursor() as cur:
+        cur.executemany("INSERT IGNORE INTO tri_palavras_salvam (termo) VALUES (%s)", [(p,) for p in padrao])
+    gravar_config("salvam_semeadas", "1")
+
+
+def listar_palavras_salvam():
+    with get_cursor() as cur:
+        cur.execute("SELECT termo FROM tri_palavras_salvam ORDER BY termo")
+        return [l["termo"] for l in cur.fetchall()]
+
+
+def substituir_palavras_salvam(termos):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM tri_palavras_salvam")
+        if termos:
+            cur.executemany("INSERT IGNORE INTO tri_palavras_salvam (termo) VALUES (%s)", [(t[:120],) for t in termos])
+
+
+# ---------- cards configuráveis ----------
+
+def listar_cards():
+    """Cards do usuário com os critérios, na ordem de criação."""
+    with get_cursor() as cur:
+        cur.execute("SELECT id, nome, cor, entra_no_resumo, ordem FROM tri_cards ORDER BY ordem, id")
+        cards = cur.fetchall()
+        cur.execute("SELECT id, card_id, operador, campo, valor FROM tri_card_criterios ORDER BY id")
+        criterios = cur.fetchall()
+    por_card = {c["id"]: [] for c in cards}
+    for c in criterios:
+        por_card[c["card_id"]].append({"operador": c["operador"], "campo": c["campo"], "valor": c["valor"]})
+    for c in cards:
+        c["entra_no_resumo"] = bool(c["entra_no_resumo"])
+        c["criterios"] = por_card[c["id"]]
+    return cards
+
+
+def salvar_card(card_id, nome, cor, entra_no_resumo, criterios):
+    """Cria (card_id None) ou atualiza o card, trocando todos os critérios de uma vez. Devolve o id."""
+    with get_cursor() as cur:
+        if card_id is None:
+            cur.execute("SELECT COALESCE(MAX(ordem), 0) + 1 AS proxima FROM tri_cards")
+            proxima = cur.fetchone()["proxima"]
+            cur.execute(
+                "INSERT INTO tri_cards (nome, cor, entra_no_resumo, ordem) VALUES (%s, %s, %s, %s)",
+                (nome[:60], cor, int(bool(entra_no_resumo)), proxima),
+            )
+            card_id = cur.lastrowid
+        else:
+            cur.execute("UPDATE tri_cards SET nome = %s, cor = %s, entra_no_resumo = %s WHERE id = %s",
+                        (nome[:60], cor, int(bool(entra_no_resumo)), card_id))
+            cur.execute("DELETE FROM tri_card_criterios WHERE card_id = %s", (card_id,))
+        cur.executemany(
+            "INSERT INTO tri_card_criterios (card_id, operador, campo, valor) VALUES (%s, %s, %s, %s)",
+            [(card_id, c["operador"], c["campo"], c["valor"][:255]) for c in criterios],
+        )
+    return card_id
+
+
+def adicionar_criterio(card_id, operador, campo, valor):
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM tri_card_criterios WHERE card_id = %s AND operador = %s AND campo = %s AND valor = %s",
+            (card_id, operador, campo, valor),
+        )
+        if not cur.fetchone():
+            cur.execute("INSERT INTO tri_card_criterios (card_id, operador, campo, valor) VALUES (%s, %s, %s, %s)",
+                        (card_id, operador, campo, valor[:255]))
+
+
+def excluir_card(card_id):
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM tri_cards WHERE id = %s", (card_id,))

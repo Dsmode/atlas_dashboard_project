@@ -46,13 +46,14 @@ A aba Importar lê extratos de conta e faturas de cartão em OFX.
 
 ### Central de Triagem
 
-Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho é feito em fases; as duas primeiras já estão prontas:
+Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho é feito em fases; as três primeiras já estão prontas:
 
 - Conexão com o Gmail por OAuth 2.0 com o escopo mínimo (`gmail.modify`, que não permite exclusão permanente). O token de renovação fica no Gerenciador de Credenciais do Windows e o `client_secret.json` fica fora do projeto, em `%LOCALAPPDATA%\ATLAS\gmail`.
 - Importação só de metadados (remetente, assunto, data, tamanho, marcadores, cabeçalhos de lista e autenticação, trecho curto). O corpo das mensagens não é baixado.
 - Primeira carga completa que pode ser pausada e retomada sem duplicar nada, e sincronização incremental pela history API.
 - Retry com espera crescente para limite de cota e falhas de rede. A importação roda num processo separado, com progresso na tela.
 - Três cards fixos (Lixo, Spam e suspeitos, Revisar) com regras determinísticas e explicáveis: cada e-mail mostra o motivo de ter caído ali. Lista de remetentes protegidos, editável.
+- Cards seus, com regras E, OU e NÃO e prévia ao vivo, que valem mais que os sinais automáticos. Uma lista de palavras que salvam (proposta, pedido, boleto...) impede que o que importa caia no Lixo, e a correção manual vira critério da regra.
 - Exploração de termos com TF-IDF (scikit-learn, expressões de 1 a 3 palavras), lista de palavras ignoradas e grupos de termos que aparecem juntos.
 
 Como criar o projeto no Google Cloud e autorizar o acesso: a própria tela da Central de Triagem mostra o passo a passo.
@@ -113,7 +114,7 @@ Crie `modules/<nome>.py` (ou um pacote, se for grande) com uma função `render(
 
 ## O que vem a seguir
 
-- Central de Triagem: cards configuráveis com regras E, OU e NÃO, detecção de golpes, limpeza em lote com desfazer, desinscrição e triagem agendada dos e-mails novos.
+- Central de Triagem: detecção de golpes, limpeza em lote com desfazer, desinscrição e triagem agendada dos e-mails novos.
 - Leitor de CSV para a importação e teste com OFX de outros bancos.
 - No Controle Financeiro: pago e a pagar, parcelas, exportar e importar dados, orçamento por categoria e um cartão financeiro no Início.
 - "Prazos próximos" do Início ligado às metas reais.

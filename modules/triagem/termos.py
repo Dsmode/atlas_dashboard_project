@@ -8,7 +8,7 @@ import streamlit as st
 from database.triagem import repo, tfidf
 from database.triagem.estado import fmt_int
 
-from . import dados
+from . import dados, editor
 from .cards import CARDS
 
 FILTROS = {"todos": "Todos os e-mails", **{card: info["titulo"] for card, info in CARDS.items()}}
@@ -34,14 +34,30 @@ def _palavras_ignoradas():
             st.rerun()
 
 
+def _palavras_que_salvam():
+    atuais = repo.listar_palavras_salvam()
+    with st.popover("Palavras que salvam", icon=":material/shield_with_heart:"):
+        st.markdown(
+            "Um e-mail com uma destas palavras no assunto ou no trecho **nunca cai no Lixo**: vai para Revisar, "
+            "de qualquer remetente. Serve para o que importa no meio de promoções (proposta, pedido, boleto). "
+            "Uma palavra ou expressão por linha.")
+        texto = st.text_area("Palavras que salvam", value="\n".join(atuais), height=220,
+                             label_visibility="collapsed", key="tri_salvam_texto")
+        if st.button("Salvar", key="tri_salvam_salvar", type="primary"):
+            repo.substituir_palavras_salvam(tfidf.normalizar_ruido(texto.splitlines()))
+            st.session_state.pop("tri_salvam_texto", None)
+            dados.renovar_tabelas()
+            st.rerun()
+
+
 def _grupos(grupos):
     st.markdown('<div class="tri-secao-titulo">Grupos sugeridos</div>', unsafe_allow_html=True)
     if not grupos:
         st.markdown('<div class="tri-texto tri-vazio">Nenhum grupo claro de termos ainda.</div>',
                     unsafe_allow_html=True)
         return
-    st.markdown('<div class="tri-nota">Termos que aparecem juntos nos mesmos e-mails. Quando os cards '
-                'configuráveis chegarem, cada grupo vira um card com um clique.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tri-nota">Termos que aparecem juntos nos mesmos e-mails. "Criar card" abre o editor '
+                'com um critério OU para cada termo, e você ajusta antes de salvar.</div>', unsafe_allow_html=True)
     colunas = st.columns(2)
     for numero, grupo in enumerate(grupos):
         with colunas[numero % 2], st.container(key=f"tri_card_grupo_{numero}"):
@@ -49,6 +65,8 @@ def _grupos(grupos):
             st.markdown(f'<div class="tri-chips">{chips}</div>'
                         f'<div class="tri-texto"><b>{fmt_int(grupo["emails"])} e-mails</b> têm pelo menos dois '
                         'destes termos.</div>', unsafe_allow_html=True)
+            st.button("Criar card", key=f"tri_grupo_card_{numero}", icon=":material/add:",
+                      on_click=editor.card_a_partir_de_termos, args=(grupo["termos"],))
 
 
 def secao():
@@ -62,6 +80,7 @@ def secao():
         filtro = st.segmented_control("Analisar", list(FILTROS), format_func=FILTROS.get, default="todos",
                                       key="tri_filtro_termos", label_visibility="collapsed") or "todos"
         _palavras_ignoradas()
+        _palavras_que_salvam()
 
     with st.spinner("Calculando os termos…"):
         resultado = dados.termos(dados.versao(), filtro)
@@ -89,8 +108,12 @@ def secao():
                 "Principais remetentes": st.column_config.TextColumn(width="large"),
             })
         escolhidos = list(evento.selection.rows)
-        if st.button("Ignorar selecionados", key="tri_ignorar", icon=":material/block:", disabled=not escolhidos):
-            _ignorar([itens[i]["termo"] for i in escolhidos])
-            dados.renovar_tabelas()
-            st.rerun()
+        with st.container(horizontal=True, gap="small"):
+            if st.button("Ignorar selecionados", key="tri_ignorar", icon=":material/block:", disabled=not escolhidos):
+                _ignorar([itens[i]["termo"] for i in escolhidos])
+                dados.renovar_tabelas()
+                st.rerun()
+            st.button("Criar card com os selecionados", key="tri_card_dos_termos", icon=":material/add:",
+                      disabled=not escolhidos, on_click=editor.card_a_partir_de_termos,
+                      args=([itens[i]["termo"] for i in escolhidos],) if escolhidos else ([""],))
     _grupos(resultado["grupos"])

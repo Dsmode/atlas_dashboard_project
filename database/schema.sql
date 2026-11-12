@@ -194,3 +194,26 @@ CREATE TABLE IF NOT EXISTS tri_protegidos (
     origem ENUM('padrao', 'usuario') NOT NULL DEFAULT 'usuario',
     criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS tri_palavras_salvam (
+    termo VARCHAR(120) PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS tri_cards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(60) NOT NULL,
+    cor VARCHAR(20) NOT NULL DEFAULT 'teal',
+    entra_no_resumo TINYINT(1) NOT NULL DEFAULT 0,
+    ordem INT NOT NULL DEFAULT 0,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tri_card_criterios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    card_id INT NOT NULL,
+    operador ENUM('e', 'ou', 'nao') NOT NULL,
+    campo VARCHAR(20) NOT NULL,
+    valor VARCHAR(255) NOT NULL,
+    INDEX idx_tri_card_criterios_card (card_id),
+    FOREIGN KEY (card_id) REFERENCES tri_cards (id) ON DELETE CASCADE
+);

@@ -1,6 +1,6 @@
 """Converte a mensagem do Gmail (formato metadata) no registro de `tri_emails`. Sem banco, sem Streamlit."""
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.header import decode_header, make_header
 from email.utils import parseaddr, parsedate_to_datetime
 from html import unescape
@@ -51,12 +51,12 @@ def _data(mensagem, cabecalhos):
     """internalDate (ms desde 1970, UTC) é a data confiável; o cabeçalho Date só entra se faltar."""
     bruto = mensagem.get("internalDate")
     if bruto:
-        return datetime.fromtimestamp(int(bruto) / 1000, tz=timezone.utc).replace(tzinfo=None)
+        return datetime.fromtimestamp(int(bruto) / 1000, tz=UTC).replace(tzinfo=None)
     try:
         data = parsedate_to_datetime(_primeiro(cabecalhos, "Date") or "")
     except (TypeError, ValueError):
         return None
-    return data.astimezone(timezone.utc).replace(tzinfo=None) if data.tzinfo else data
+    return data.astimezone(UTC).replace(tzinfo=None) if data.tzinfo else data
 
 
 def _resultado_gmail(cabecalhos):

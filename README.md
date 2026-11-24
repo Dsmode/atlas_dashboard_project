@@ -46,7 +46,7 @@ A aba Importar lê extratos de conta e faturas de cartão em OFX.
 
 ### Central de Triagem
 
-Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho é feito em fases; as três primeiras já estão prontas:
+Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho foi feito em fases; todas as fases já estão prontas:
 
 - Conexão com o Gmail por OAuth 2.0 com o escopo mínimo (`gmail.modify`, que não permite exclusão permanente). O token de renovação fica no Gerenciador de Credenciais do Windows e o `client_secret.json` fica fora do projeto, em `%LOCALAPPDATA%\ATLAS\gmail`.
 - Importação só de metadados (remetente, assunto, data, tamanho, marcadores, cabeçalhos de lista e autenticação, trecho curto). O corpo das mensagens não é baixado.
@@ -54,6 +54,8 @@ Organiza uma caixa do Gmail grande sem apagar nada de vez. O trabalho é feito e
 - Retry com espera crescente para limite de cota e falhas de rede. A importação roda num processo separado, com progresso na tela.
 - Três cards fixos (Lixo, Spam e suspeitos, Revisar) com regras determinísticas e explicáveis: cada e-mail mostra o motivo de ter caído ali. Lista de remetentes protegidos, editável.
 - Cards seus, com regras E, OU e NÃO e prévia ao vivo, que valem mais que os sinais automáticos. Uma lista de palavras que salvam (proposta, pedido, boleto...) impede que o que importa caia no Lixo, e a correção manual vira critério da regra.
+- Marcadores no Gmail com o nome de cada card (`ATLAS/...`), arquivar para uma quarentena e mover para a lixeira, sempre com confirmação, histórico e desfazer. Nada é excluído de vez. Remetentes protegidos ficam fora das ações em lote e golpes marcados vão para um card de alerta.
+- Cancelamento de inscrição em listas pelo pedido de um clique do próprio remetente (HTTPS, só para endereços públicos), e triagem automática dos e-mails novos pelo Agendador do Windows, de início só sugerindo. Nada vai para a lixeira sozinho.
 - Exploração de termos com TF-IDF (scikit-learn, expressões de 1 a 3 palavras), lista de palavras ignoradas e grupos de termos que aparecem juntos.
 
 Como criar o projeto no Google Cloud e autorizar o acesso: a própria tela da Central de Triagem mostra o passo a passo.
@@ -114,7 +116,7 @@ Crie `modules/<nome>.py` (ou um pacote, se for grande) com uma função `render(
 
 ## O que vem a seguir
 
-- Central de Triagem: detecção de golpes, limpeza em lote com desfazer, desinscrição e triagem agendada dos e-mails novos.
+- Central de Triagem: resumo diário e campos extraídos por card (extensões previstas).
 - Leitor de CSV para a importação e teste com OFX de outros bancos.
 - No Controle Financeiro: pago e a pagar, parcelas, exportar e importar dados, orçamento por categoria e um cartão financeiro no Início.
 - "Prazos próximos" do Início ligado às metas reais.

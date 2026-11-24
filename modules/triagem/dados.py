@@ -5,7 +5,7 @@ import json
 
 import streamlit as st
 
-from database.triagem import classificacao, regras, repo, tfidf
+from database.triagem import analise, repo, tfidf
 
 
 def versao():
@@ -14,30 +14,15 @@ def versao():
     assinatura = json.dumps([
         dados["total"], str(dados["nao_lidos"]), repo.obter_config("ultima_sincronizacao"),
         sorted(p["valor"] for p in repo.listar_protegidos()), repo.listar_ruido(), repo.listar_palavras_salvam(),
-        repo.listar_cards(),
+        repo.listar_cards(), sorted(b["valor"] for b in repo.listar_bloqueados()), repo.listar_acoes(1),
+        sorted(str(d["feita_em"]) for d in repo.listar_desinscricoes().values()),
     ], sort_keys=True, default=str)
     return hashlib.md5(assinatura.encode("utf-8")).hexdigest()
 
 
 @st.cache_data(show_spinner=False, max_entries=3)
 def caixa(chave):
-    """Todos os e-mails, a classificação de cada um, os cards do usuário e o resumo de todos os cards."""
-    repo.garantir_protegidos_padrao(classificacao.PROTEGIDOS_PADRAO)
-    repo.garantir_palavras_salvam_padrao(classificacao.PALAVRAS_SALVAM_PADRAO)
-    protegidos = {p["valor"] for p in repo.listar_protegidos()}
-    emails = repo.emails_para_classificar()
-    preparados = {e["id"]: regras.preparar(e) for e in emails if not e["enviado"]}
-    cards = repo.listar_cards()
-    salvam = [regras.sem_acento(p) for p in repo.listar_palavras_salvam()]
-    resultado = classificacao.classificar(
-        emails, protegidos, classificacao.ids_que_casam_com_algum(cards, preparados), salvam, preparados)
-    membros = classificacao.membros_dos_cards(cards, preparados, resultado)
-    return {
-        "emails": emails, "preparados": preparados, "classificacao": resultado, "cards": cards, "membros": membros,
-        "resumo": classificacao.resumo_por_card(emails, resultado),
-        "resumo_cards": {c["id"]: classificacao.resumo_de_ids(emails, membros[c["id"]]) for c in cards},
-        "protegidos": sorted(protegidos),
-    }
+    return analise.calcular()
 
 
 def cards_do_email(caixa_dados, email_id):
@@ -51,7 +36,7 @@ def termos(chave, filtro):
     dados = caixa(chave)
     selecionados = [
         e for e in dados["emails"]
-        if not e["enviado"] and (filtro == "todos" or dados["classificacao"].get(e["id"], (None,))[0] == filtro)
+        if analise.analisavel(e) and (filtro == "todos" or dados["classificacao"].get(e["id"], (None,))[0] == filtro)
     ]
     textos = [tfidf.texto_do_email(e["assunto"], e["snippet"]) for e in selecionados]
     itens, matriz, indices = tfidf.extrair_termos(textos, ruido=repo.listar_ruido())
@@ -61,6 +46,12 @@ def termos(chave, filtro):
     for item in itens:
         item["remetentes"] = donos.get(item["termo"], [])
     return {"itens": itens, "grupos": tfidf.grupos_sugeridos(matriz, indices), "total": len(selecionados)}
+
+
+@st.cache_data(show_spinner=False, max_entries=2)
+def cabecalhos_de_lista(chave):
+    """Cabeçalhos List-Unsubscribe (do mais novo para o mais antigo): leitura pesada, vale o cache da caixa."""
+    return repo.cabecalhos_de_lista()
 
 
 def chave_tabela(nome):

@@ -13,7 +13,7 @@ from database.triagem import repo
 from database.triagem.estado import estado_importacao, fmt_int
 from integracoes.gmail import autenticacao, config
 
-from . import cards, protegidos, termos
+from . import acoes, auto, cards, desinscrever, protegidos, termos
 
 RAIZ = Path(__file__).resolve().parents[2]
 CSS_DIR = RAIZ / "assets" / "triagem"
@@ -286,7 +286,8 @@ def _conta():
             st.button("Desconectar o Gmail", key="tri_desconectar", on_click=_desconectar)
 
 
-SECOES = ("Cards", "Explorar termos", "Protegidos", "Caixa e conta")
+SECOES = ("Cards", "Explorar termos", "Desinscrever", "Bloqueios e protegidos", "Automático e histórico",
+          "Caixa e conta")
 
 
 def _caixa_e_conta():
@@ -315,11 +316,16 @@ def render():
             st.fragment(run_every=2 if ativo else None)(_painel_importacao)()
             secao = st.segmented_control("Seção", SECOES, default=SECOES[0], key="tri_secao",
                                          label_visibility="collapsed") or SECOES[0]
+            acoes.mostrar_aviso()
             if secao == "Cards":
                 cards.secao()
             elif secao == "Explorar termos":
                 termos.secao()
-            elif secao == "Protegidos":
+            elif secao == "Desinscrever":
+                desinscrever.secao()
+            elif secao == "Bloqueios e protegidos":
                 protegidos.secao()
+            elif secao == "Automático e histórico":
+                auto.secao()
             else:
                 _caixa_e_conta()

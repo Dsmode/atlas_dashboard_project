@@ -1,9 +1,9 @@
 """Em qual card fixo cada e-mail cai e por quê. Puro e determinístico: mesmas entradas, mesmo resultado.
 
-Ordem (a primeira que casa vence): suspeito > protegido > regras dos cards do usuário > lixo > revisar. Quem casa
+Ordem (a primeira que casa vence): bloqueado (golpe marcado por você) > suspeito > protegido > regras dos cards do usuário > lixo > revisar. Quem casa
 com uma regra de card do usuário não vai para Lixo nem Revisar (a regra do usuário vale mais que o sinal
 automático). Palavras que salvam impedem o Lixo. Enviados não entram em card.
-A Fase 4 acrescenta bloqueios (antes de tudo)."""
+E-mails que já estão na lixeira do Gmail não entram em card."""
 import unicodedata
 from collections import Counter, defaultdict
 from difflib import SequenceMatcher
@@ -96,20 +96,22 @@ def _forjado(e, protegido):
     return None
 
 
-def classificar(emails, protegidos, em_cards=frozenset(), salvam=(), preparados=None):
+def classificar(emails, protegidos, em_cards=frozenset(), salvam=(), preparados=None, bloqueados=frozenset()):
     """`emails`: dicts com id, remetente_email, remetente_nome, dominio, lido (0/1), categoria,
     tem_cancelamento (bool), spf, dkim, dmarc, spam (bool), enviado (bool).
     `em_cards`: ids que casam com alguma regra de card do usuário. `salvam`: palavras que salvam (normalizadas).
-    `preparados`: {id: regras.preparar(e)} (opcional; calculado na hora se faltar).
+    `preparados`: {id: regras.preparar(e)} (opcional; calculado na hora se faltar). `bloqueados`: remetentes e
+    domínios que o usuário marcou como golpe.
 
     Devolve {id: (card, motivo)}. Enviados e e-mails resolvidos por regra do usuário ficam de fora do resultado
     (menos suspeitos e protegidos, que mantêm o card fixo)."""
     protegidos = {p.lower() for p in protegidos}
+    bloqueados = {b.lower() for b in bloqueados}
     marcas = _marcas(protegidos)
 
     por_remetente = defaultdict(lambda: [0, 0])  # total, lidos (só e-mails recebidos)
     for e in emails:
-        if not e.get("enviado"):
+        if not e.get("enviado") and not e.get("lixeira"):
             conta = por_remetente[(e["remetente_email"] or "").lower()]
             conta[0] += 1
             conta[1] += 1 if e["lido"] else 0
@@ -117,11 +119,12 @@ def classificar(emails, protegidos, em_cards=frozenset(), salvam=(), preparados=
     cache_dominio = {}
     resultado = {}
     for e in emails:
-        if e.get("enviado"):
+        if e.get("enviado") or e.get("lixeira"):
             continue
         remetente = (e["remetente_email"] or "").lower()
         protegido = e_protegido(remetente, e.get("dominio"), protegidos)
-        motivo = _forjado(e, protegido)  # um protegido forjado continua sendo golpe: a verificação vem antes da lista
+        bloqueado = e_protegido(remetente, e.get("dominio"), bloqueados)
+        motivo = "Marcado por você como golpe" if bloqueado else _forjado(e, protegido)  # um protegido forjado continua sendo golpe: a verificação vem antes da lista
         if not motivo and not protegido:
             dominio = e.get("dominio")
             if dominio not in cache_dominio:

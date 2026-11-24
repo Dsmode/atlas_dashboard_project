@@ -1,5 +1,6 @@
-"""Processo que sincroniza a caixa com o Gmail. A tela o abre em segundo plano e o Agendador do Windows o chama
-sozinho: `python -m database.triagem.executor`. O progresso e os erros ficam no banco; o log só tem contagens."""
+"""Processo que sincroniza a caixa com o Gmail e, em seguida, faz a triagem dos e-mails novos. A tela o abre em
+segundo plano e o Agendador do Windows o chama sozinho (`--agendada`): `python -m database.triagem.executor`. O
+progresso e os erros ficam no banco; o log só tem contagens."""
 import logging
 import os
 import sys
@@ -8,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 import mysql.connector
 
 from database import connection
-from database.triagem import importacao, repo
+from database.triagem import automatico, importacao, repo
 from integracoes.gmail import config
 from integracoes.gmail.autenticacao import AutenticacaoExpirada, NaoConectado
 from integracoes.gmail.cliente import ClienteGmail
@@ -49,7 +50,7 @@ def _limpar_erro():
         repo.gravar_config(chave, None)
 
 
-def executar(criar_cliente=ClienteGmail.conectar):
+def executar(criar_cliente=ClienteGmail.conectar, origem="manual"):
     connection.init_db()
     trava = _adquirir_trava()
     if trava is None:
@@ -57,11 +58,15 @@ def executar(criar_cliente=ClienteGmail.conectar):
         return JA_RODANDO
     try:
         repo.gravar_config("pedido_pausa", None)
+        cliente = criar_cliente()
         resumo = importacao.sincronizar(
-            criar_cliente(), pid=os.getpid(), pausar=lambda: repo.obter_config("pedido_pausa") == "1",
+            cliente, pid=os.getpid(), pausar=lambda: repo.obter_config("pedido_pausa") == "1",
         )
         _limpar_erro()
         log.info("Sincronização %s: %s", resumo.get("modo"), {k: v for k, v in resumo.items() if k != "modo"})
+        if not resumo.get("interrompida"):
+            triagem = automatico.triar(cliente, origem=origem)
+            log.info("Triagem %s: %s novos", origem, triagem["novos"])
         return OK
     except (NaoConectado, AutenticacaoExpirada) as erro:
         _registrar_erro("autorizacao", erro)
@@ -75,9 +80,10 @@ def executar(criar_cliente=ClienteGmail.conectar):
         trava.close()
 
 
-def main():
+def main(argumentos=None):
     _configurar_log()
-    return executar()
+    agendada = "--agendada" in (sys.argv[1:] if argumentos is None else argumentos)
+    return executar(origem="agendada" if agendada else "manual")
 
 
 if __name__ == "__main__":

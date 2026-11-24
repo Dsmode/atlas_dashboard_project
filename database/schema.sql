@@ -217,3 +217,55 @@ CREATE TABLE IF NOT EXISTS tri_card_criterios (
     INDEX idx_tri_card_criterios_card (card_id),
     FOREIGN KEY (card_id) REFERENCES tri_cards (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS tri_bloqueados (
+    valor VARCHAR(320) PRIMARY KEY,
+    tipo ENUM('dominio', 'email') NOT NULL,
+    motivo VARCHAR(255) NULL,
+    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tri_acoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('marcar', 'arquivar', 'lixeira') NOT NULL,
+    descricao VARCHAR(255) NOT NULL,
+    quantidade INT NOT NULL DEFAULT 0,
+    status ENUM('feita', 'desfeita') NOT NULL DEFAULT 'feita',
+    criada_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    desfeita_em DATETIME NULL
+);
+
+CREATE TABLE IF NOT EXISTS tri_acao_itens (
+    acao_id INT NOT NULL,
+    email_id VARCHAR(32) NOT NULL,
+    adicionados VARCHAR(500) NOT NULL DEFAULT '',
+    removidos VARCHAR(500) NOT NULL DEFAULT '',
+    PRIMARY KEY (acao_id, email_id),
+    FOREIGN KEY (acao_id) REFERENCES tri_acoes (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tri_desinscricoes (
+    remetente VARCHAR(320) PRIMARY KEY,
+    dominio VARCHAR(255) NULL,
+    metodo VARCHAR(20) NOT NULL,
+    status ENUM('ok', 'falhou') NOT NULL,
+    http_status INT NULL,
+    mensagem VARCHAR(255) NULL,
+    feita_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tri_card_modos (
+    chave VARCHAR(20) PRIMARY KEY,
+    modo ENUM('sugerir', 'marcar', 'quarentena') NOT NULL DEFAULT 'sugerir'
+);
+
+CREATE TABLE IF NOT EXISTS tri_execucoes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    origem ENUM('agendada', 'manual') NOT NULL,
+    iniciada_em DATETIME NOT NULL,
+    finalizada_em DATETIME NULL,
+    status ENUM('ok', 'erro') NOT NULL DEFAULT 'ok',
+    novos INT NOT NULL DEFAULT 0,
+    resumo TEXT NULL,
+    erro VARCHAR(500) NULL
+);

@@ -35,15 +35,23 @@ def gravar_config(chave, valor):
 # ---------- marcadores do Gmail ----------
 
 def gravar_marcadores(marcadores):
-    """`marcadores` vem do labels.list do Gmail: dicts com id, name e type ("system" ou "user")."""
+    """`marcadores` vem do labels.list do Gmail: dicts com id, name e type ("system" ou "user"). A lista é a verdade:
+    o marcador que sumiu do Gmail (apagado à mão) sai do banco, com os vínculos dele."""
     if not marcadores:
         return
+    ids = [m["id"] for m in marcadores]
     with get_cursor() as cur:
         cur.executemany(
             "INSERT INTO tri_marcadores (id, nome, tipo) VALUES (%s, %s, %s) "
             "ON DUPLICATE KEY UPDATE nome = VALUES(nome), tipo = VALUES(tipo)",
             [(m["id"], m["name"][:255], "sistema" if m.get("type") == "system" else "usuario") for m in marcadores],
         )
+        lugares = ", ".join(["%s"] * len(ids))
+        cur.execute(f"SELECT id FROM tri_marcadores WHERE tipo = 'usuario' AND id NOT IN ({lugares})", ids)
+        sumidos = [l["id"] for l in cur.fetchall()]
+        for marcador_id in sumidos:  # só marcadores de usuário: os do sistema (INBOX, TRASH...) nunca saem
+            cur.execute("DELETE FROM tri_email_marcadores WHERE marcador_id = %s", (marcador_id,))
+            cur.execute("DELETE FROM tri_marcadores WHERE id = %s", (marcador_id,))
 
 
 # ---------- e-mails ----------
@@ -186,13 +194,16 @@ def emails_para_classificar():
             "SELECT e.id, e.remetente_nome, e.remetente_email, e.dominio, e.assunto, e.snippet, e.data_email, e.lido, e.categoria, "
             "e.spf, e.dkim, e.dmarc, (e.list_unsubscribe IS NOT NULL AND e.list_unsubscribe <> '') AS tem_cancelamento, "
             "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SPAM') AS spam, "
-            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SENT') AS enviado "
+            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'SENT') AS enviado, "
+            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'TRASH') AS lixeira, "
+            "EXISTS (SELECT 1 FROM tri_email_marcadores m WHERE m.email_id = e.id AND m.marcador_id = 'INBOX') AS na_caixa "
             "FROM tri_emails e"
         )
         linhas = cur.fetchall()
     for l in linhas:
         l["lido"], l["tem_cancelamento"] = bool(l["lido"]), bool(l["tem_cancelamento"])
         l["spam"], l["enviado"] = bool(l["spam"]), bool(l["enviado"])
+        l["lixeira"], l["na_caixa"] = bool(l["lixeira"]), bool(l["na_caixa"])
     return linhas
 
 
@@ -330,3 +341,181 @@ def adicionar_criterio(card_id, operador, campo, valor):
 def excluir_card(card_id):
     with get_cursor() as cur:
         cur.execute("DELETE FROM tri_cards WHERE id = %s", (card_id,))
+
+
+# ---------- bloqueados (golpes) ----------
+
+def listar_bloqueados():
+    with get_cursor() as cur:
+        cur.execute("SELECT valor, tipo, motivo, criado_em FROM tri_bloqueados ORDER BY tipo, valor")
+        return cur.fetchall()
+
+
+def adicionar_bloqueados(itens, motivo=None):
+    """`itens`: pares (tipo, valor)."""
+    if itens:
+        with get_cursor() as cur:
+            cur.executemany(
+                "INSERT IGNORE INTO tri_bloqueados (valor, tipo, motivo) VALUES (%s, %s, %s)",
+                [(valor[:320], tipo, motivo) for tipo, valor in itens],
+            )
+
+
+def remover_bloqueados(valores):
+    if valores:
+        with get_cursor() as cur:
+            cur.executemany("DELETE FROM tri_bloqueados WHERE valor = %s", [(v,) for v in valores])
+
+
+# ---------- ações no Gmail (marcar, arquivar, lixeira) e o que é preciso para desfazer ----------
+
+def aplicar_marcadores_local(ids, adicionar=(), remover=()):
+    """Reflete no banco o que acabou de ser feito no Gmail, para a tela não esperar a próxima sincronização."""
+    ids = list(ids)
+    for i in range(0, len(ids), _LOTE_SQL):
+        bloco = ids[i:i + _LOTE_SQL]
+        with get_cursor() as cur:
+            if remover:
+                cur.execute(
+                    f"DELETE FROM tri_email_marcadores WHERE email_id IN ({_em(cur, bloco)}) "
+                    f"AND marcador_id IN ({', '.join(['%s'] * len(remover))})", [*bloco, *remover])
+            if adicionar:
+                cur.executemany("INSERT IGNORE INTO tri_email_marcadores (email_id, marcador_id) VALUES (%s, %s)",
+                                [(e, m) for e in bloco for m in adicionar])
+
+
+def marcadores_dos_emails(ids):
+    """{id do e-mail: conjunto de ids de marcador}."""
+    ids = list(ids)
+    resultado = {i: set() for i in ids}
+    for k in range(0, len(ids), _LOTE_SQL):
+        bloco = ids[k:k + _LOTE_SQL]
+        with get_cursor() as cur:
+            cur.execute(f"SELECT email_id, marcador_id FROM tri_email_marcadores WHERE email_id IN ({_em(cur, bloco)})",
+                        bloco)
+            for l in cur.fetchall():
+                resultado[l["email_id"]].add(l["marcador_id"])
+    return resultado
+
+
+def ids_existentes(ids):
+    """Dos ids dados, os que ainda estão em tri_emails (os que o Gmail já esvaziou da lixeira somem na sincronização)."""
+    ids = list(ids)
+    achados = set()
+    for k in range(0, len(ids), _LOTE_SQL):
+        bloco = ids[k:k + _LOTE_SQL]
+        with get_cursor() as cur:
+            cur.execute(f"SELECT id FROM tri_emails WHERE id IN ({_em(cur, bloco)})", bloco)
+            achados |= {l["id"] for l in cur.fetchall()}
+    return achados
+
+
+def ids_com_marcador(marcador_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT email_id FROM tri_email_marcadores WHERE marcador_id = %s", (marcador_id,))
+        return {l["email_id"] for l in cur.fetchall()}
+
+
+def criar_acao(tipo, descricao, itens):
+    """Registra a ação e o que mudou em cada e-mail. `itens`: lista de (email_id, adicionados, removidos), com os
+    marcadores como listas de ids."""
+    with get_cursor() as cur:
+        cur.execute("INSERT INTO tri_acoes (tipo, descricao, quantidade) VALUES (%s, %s, %s)",
+                    (tipo, descricao[:255], len(itens)))
+        acao_id = cur.lastrowid
+        cur.executemany(
+            "INSERT INTO tri_acao_itens (acao_id, email_id, adicionados, removidos) VALUES (%s, %s, %s, %s)",
+            [(acao_id, e, ",".join(a), ",".join(r)) for e, a, r in itens],
+        )
+    return acao_id
+
+
+def listar_acoes(limite=50):
+    with get_cursor() as cur:
+        cur.execute("SELECT id, tipo, descricao, quantidade, status, criada_em, desfeita_em FROM tri_acoes "
+                    "ORDER BY id DESC LIMIT %s", (limite,))
+        return cur.fetchall()
+
+
+def obter_acao(acao_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT id, tipo, descricao, quantidade, status, criada_em, desfeita_em FROM tri_acoes "
+                    "WHERE id = %s", (acao_id,))
+        return cur.fetchone()
+
+
+def itens_da_acao(acao_id):
+    with get_cursor() as cur:
+        cur.execute("SELECT email_id, adicionados, removidos FROM tri_acao_itens WHERE acao_id = %s", (acao_id,))
+        linhas = cur.fetchall()
+    return [(l["email_id"], [x for x in l["adicionados"].split(",") if x], [x for x in l["removidos"].split(",") if x])
+            for l in linhas]
+
+
+def marcar_acao_desfeita(acao_id):
+    with get_cursor() as cur:
+        cur.execute("UPDATE tri_acoes SET status = 'desfeita', desfeita_em = NOW() WHERE id = %s", (acao_id,))
+
+
+# ---------- desinscrições ----------
+
+def cabecalhos_de_lista():
+    """Cabeçalhos List-Unsubscribe de todos os e-mails que os têm, do mais novo para o mais antigo."""
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT remetente_email, list_unsubscribe, list_unsubscribe_post FROM tri_emails "
+            "WHERE list_unsubscribe IS NOT NULL AND list_unsubscribe <> '' ORDER BY data_email DESC"
+        )
+        return cur.fetchall()
+
+
+def gravar_desinscricao(remetente, dominio, metodo, ok, http_status, mensagem):
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO tri_desinscricoes (remetente, dominio, metodo, status, http_status, mensagem, feita_em) "
+            "VALUES (%s, %s, %s, %s, %s, %s, NOW()) ON DUPLICATE KEY UPDATE dominio = VALUES(dominio), "
+            "metodo = VALUES(metodo), status = VALUES(status), http_status = VALUES(http_status), "
+            "mensagem = VALUES(mensagem), feita_em = NOW()",
+            (remetente[:320], (dominio or "")[:255], metodo, "ok" if ok else "falhou", http_status, (mensagem or "")[:255]),
+        )
+
+
+def listar_desinscricoes():
+    with get_cursor() as cur:
+        cur.execute("SELECT remetente, dominio, metodo, status, http_status, mensagem, feita_em FROM tri_desinscricoes")
+        return {l["remetente"]: l for l in cur.fetchall()}
+
+
+# ---------- triagem automática ----------
+
+def obter_modos():
+    with get_cursor() as cur:
+        cur.execute("SELECT chave, modo FROM tri_card_modos")
+        return {l["chave"]: l["modo"] for l in cur.fetchall()}
+
+
+def gravar_modo(chave, modo):
+    with get_cursor() as cur:
+        cur.execute("INSERT INTO tri_card_modos (chave, modo) VALUES (%s, %s) ON DUPLICATE KEY UPDATE modo = VALUES(modo)",
+                    (chave, modo))
+
+
+def criar_execucao(origem, iniciada_em):
+    with get_cursor() as cur:
+        cur.execute("INSERT INTO tri_execucoes (origem, iniciada_em) VALUES (%s, %s)", (origem, iniciada_em))
+        return cur.lastrowid
+
+
+def finalizar_execucao(execucao_id, finalizada_em, status, novos, resumo, erro=None):
+    with get_cursor() as cur:
+        cur.execute(
+            "UPDATE tri_execucoes SET finalizada_em = %s, status = %s, novos = %s, resumo = %s, erro = %s WHERE id = %s",
+            (finalizada_em, status, novos, resumo, (erro or "")[:500] or None, execucao_id),
+        )
+
+
+def listar_execucoes(limite=30):
+    with get_cursor() as cur:
+        cur.execute("SELECT id, origem, iniciada_em, finalizada_em, status, novos, resumo, erro FROM tri_execucoes "
+                    "ORDER BY id DESC LIMIT %s", (limite,))
+        return cur.fetchall()

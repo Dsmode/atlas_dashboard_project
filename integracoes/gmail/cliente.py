@@ -1,7 +1,8 @@
 """Cliente fino da Gmail API: só o que a Central de Triagem usa.
 
 Não existe aqui nenhum método de exclusão permanente: o escopo gmail.modify nem permitiria, e o cliente também
-não oferece. As ações destrutivas (Fase 4) usarão só batchModify e trash/untrash.
+não oferece. As ações da Fase 4 usam só marcadores (labels) e batchModify; mover para a lixeira é adicionar o
+marcador TRASH, e tirar da lixeira é o contrário.
 """
 import time
 
@@ -30,6 +31,8 @@ TAMANHO_LOTE = 10
 MAX_POR_SEGUNDO = 20
 MIN_POR_SEGUNDO = 2
 TENTATIVAS_LOTE = 8
+MAX_IDS_POR_MODIFICACAO = 1000  # limite do batchModify
+PAI_DOS_MARCADORES = "ATLAS"
 
 
 class HistoricoExpirado(Exception):
@@ -139,3 +142,38 @@ class ClienteGmail:
             if erro.status == 404:
                 raise HistoricoExpirado from erro
             raise
+
+    # ---------- escrita: marcadores e lixeira (nunca exclusão permanente) ----------
+
+    def garantir_marcador(self, nome):
+        """Devolve o id do marcador `nome`, criando-o (e o pai "ATLAS") se ainda não existir."""
+        existentes = {m["name"]: m["id"] for m in self.listar_marcadores()}
+        if nome in existentes:
+            return existentes[nome]
+        if "/" in nome:
+            pai = nome.rsplit("/", 1)[0]
+            if pai not in existentes:
+                self.garantir_marcador(pai)
+        corpo = {"name": nome, "labelListVisibility": "labelShow", "messageListVisibility": "show"}
+        return self._executar(self._servico.users().labels().create(userId="me", body=corpo))["id"]
+
+    def alterar_marcadores(self, ids, adicionar=(), remover=()):
+        """Acrescenta e tira marcadores de várias mensagens (batchModify, 1.000 por chamada). Devolve quantas."""
+        ids = list(dict.fromkeys(ids))
+        if not ids or not (adicionar or remover):
+            return 0
+        for i in range(0, len(ids), MAX_IDS_POR_MODIFICACAO):
+            corpo = {"ids": ids[i:i + MAX_IDS_POR_MODIFICACAO], "addLabelIds": list(adicionar),
+                     "removeLabelIds": list(remover)}
+            self._executar(self._servico.users().messages().batchModify(userId="me", body=corpo))
+        return len(ids)
+
+    def mover_para_lixeira(self, ids):
+        """Vai para a lixeira do Gmail (que se esvazia sozinha em 30 dias). Sai da caixa de entrada."""
+        return self.alterar_marcadores(ids, adicionar=["TRASH"], remover=["INBOX"])
+
+    def tirar_da_lixeira(self, ids, voltar_para_caixa=()):
+        """Desfaz `mover_para_lixeira`. `voltar_para_caixa` são os ids que estavam na caixa de entrada."""
+        voltar = set(voltar_para_caixa)
+        feitos = self.alterar_marcadores([i for i in ids if i in voltar], adicionar=["INBOX"], remover=["TRASH"])
+        return feitos + self.alterar_marcadores([i for i in ids if i not in voltar], remover=["TRASH"])

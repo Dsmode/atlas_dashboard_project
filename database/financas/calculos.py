@@ -1,7 +1,8 @@
 """Regras do Controle Financeiro sem banco nem tela: meses, totais, gráficos e cópia de fixos.
 
 Um lançamento é o dict de `financas.repo.listar_lancamentos`: tipo ('entrada', 'fixo' ou 'variavel'), data,
-valor (Decimal sempre positivo), categoria_id, categoria_nome, categoria_cor..."""
+valor e valor_previsto (Decimal positivo ou None; pelo menos um dos dois existe), categoria_id, categoria_nome,
+categoria_cor... Totais e gráficos usam só `valor`; a previsão é somada à parte."""
 
 import calendar
 from collections import Counter
@@ -74,14 +75,16 @@ def grupo_categoria(tipo):
     return "entrada" if tipo == "entrada" else "gasto"
 
 
-def validar_lancamento(tipo, valor, forma, banco_id, tipo_categoria, descricao=None, observacao=None):
+def validar_lancamento(tipo, valor, forma, banco_id, tipo_categoria, descricao=None, observacao=None,
+                       valor_previsto=None):
     if tipo not in TIPOS:
         return "Escolha o tipo do lançamento."
     if forma not in FORMAS:
         return "Escolha a forma de pagamento."
-    if valor is None or valor <= 0:
-        return "Informe um valor maior que zero."
-    if valor > VALOR_MAX:
+    informados = [v for v in (valor, valor_previsto) if v is not None]
+    if not informados or any(v <= 0 for v in informados):
+        return "Informe o valor ou o valor previsto, maior que zero."
+    if any(v > VALOR_MAX for v in informados):
         return "Valor alto demais."
     if tipo_categoria != grupo_categoria(tipo):
         return "Escolha uma categoria do mesmo tipo do lançamento."
@@ -94,9 +97,46 @@ def validar_lancamento(tipo, valor, forma, banco_id, tipo_categoria, descricao=N
     return None
 
 
+def realizados(lancamentos):
+    return [lanc for lanc in lancamentos if lanc["valor"] is not None]
+
+
+def somar(lancamentos, campo="valor"):
+    return sum((lanc[campo] for lanc in lancamentos if lanc.get(campo) is not None), ZERO)
+
+
+def previsao_mes(lancamentos):
+    """Soma só o que foi digitado em valor previsto; item com apenas o valor real não entra."""
+    entradas = somar([lanc for lanc in lancamentos if not e_gasto(lanc)], "valor_previsto")
+    gastos = somar([lanc for lanc in lancamentos if e_gasto(lanc)], "valor_previsto")
+    return {"entradas": entradas, "gastos": gastos, "saldo": entradas - gastos}
+
+
+def previsto_realizado(lancamentos):
+    """Uma linha por categoria de gasto com previsão ou gasto no mês, da maior para a menor.
+
+    `diferenca` (previsto menos realizado) e `uso` (% do previsto já gasto) são None sem previsão."""
+    grupos = {}
+    for lanc in lancamentos:
+        if not e_gasto(lanc):
+            continue
+        g = grupos.setdefault(lanc["categoria_id"], {
+            "id": lanc["categoria_id"], "nome": lanc["categoria_nome"], "cor": lanc["categoria_cor"],
+            "previsto": ZERO, "realizado": ZERO,
+        })
+        g["previsto"] += lanc.get("valor_previsto") or ZERO
+        g["realizado"] += lanc["valor"] or ZERO
+    for g in grupos.values():
+        previsto, realizado = g["previsto"], g["realizado"]
+        g["diferenca"] = previsto - realizado if previsto else None
+        g["uso"] = (realizado / previsto * 100).quantize(Decimal("0.1")) if previsto else None
+    return sorted(grupos.values(), key=lambda g: (-max(g["previsto"], g["realizado"]), g["nome"]))
+
+
 def resumo_mes(lancamentos):
-    entradas = sum((lanc["valor"] for lanc in lancamentos if not e_gasto(lanc)), ZERO)
-    saidas = sum((lanc["valor"] for lanc in lancamentos if e_gasto(lanc)), ZERO)
+    lancamentos = realizados(lancamentos)
+    entradas = somar([lanc for lanc in lancamentos if not e_gasto(lanc)])
+    saidas = somar([lanc for lanc in lancamentos if e_gasto(lanc)])
     pct = (saidas / entradas * 100).quantize(Decimal("0.1")) if entradas else None
     return {"entradas": entradas, "saidas": saidas, "saldo": entradas - saidas, "pct_gasto": pct}
 
@@ -129,7 +169,7 @@ def _com_percentual(grupos):
 
 def gastos_por_categoria(lancamentos):
     grupos = {}
-    for lanc in lancamentos:
+    for lanc in realizados(lancamentos):
         if e_gasto(lanc):
             g = grupos.setdefault(lanc["categoria_id"], {
                 "id": lanc["categoria_id"], "nome": lanc["categoria_nome"], "cor": lanc["categoria_cor"], "valor": ZERO,
@@ -140,25 +180,28 @@ def gastos_por_categoria(lancamentos):
 
 def gastos_por_tipo(lancamentos):
     grupos = [
-        {"id": tipo, "nome": nome, "valor": sum((lanc["valor"] for lanc in lancamentos if lanc["tipo"] == tipo), ZERO)}
+        {"id": tipo, "nome": nome, "valor": somar([lanc for lanc in lancamentos if lanc["tipo"] == tipo])}
         for tipo, nome in (("fixo", "Fixos"), ("variavel", "Variáveis"))
     ]
     return _com_percentual(grupos)
 
 
 def _assinatura(lanc):
-    return ((lanc.get("descricao") or "").strip().lower(), lanc["categoria_id"], lanc["valor"])
+    return ((lanc.get("descricao") or "").strip().lower(), lanc["categoria_id"])
 
 
 def plano_copia_fixos(fixos_anteriores, fixos_atuais, mes_destino):
-    """Cada fixo do mês anterior com a data no mês de destino e `repetido` quando já existe um igual lá
-    (mesma descrição sem caixa, categoria e valor). A conta é por quantidade: dois fixos iguais na origem e
-    um no destino deixam só um como repetido. Os repetidos vêm desmarcados na tela."""
+    """Cada fixo do mês anterior com a data no mês de destino, só como previsão: `valor_previsto` recebe o
+    valor real da origem ou, sem ele, a previsão de lá. `repetido` marca o que já existe no destino (mesma
+    descrição sem caixa e categoria). A conta é por quantidade: dois fixos iguais na origem e um no destino
+    deixam só um como repetido. Os repetidos vêm desmarcados na tela."""
     existentes = Counter(_assinatura(lanc) for lanc in fixos_atuais)
     plano = []
     for lanc in sorted(fixos_anteriores, key=lambda lanc: (lanc["data"], lanc["id"])):
         novo = dict(lanc)
         novo["data"] = data_no_mes(lanc["data"].day, mes_destino)
+        novo["valor_previsto"] = lanc["valor"] if lanc["valor"] is not None else lanc.get("valor_previsto")
+        novo["valor"] = None
         assinatura = _assinatura(lanc)
         novo["repetido"] = existentes[assinatura] > 0
         existentes[assinatura] -= 1

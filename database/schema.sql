@@ -94,13 +94,17 @@ CREATE TABLE IF NOT EXISTS fin_lancamentos (
     data DATE NOT NULL,
     descricao VARCHAR(80) NULL,
     categoria_id INT NOT NULL,
-    valor DECIMAL(14, 2) NOT NULL,
+    -- NULL em item que só tem previsão
+    valor DECIMAL(14, 2) NULL,
+    valor_previsto DECIMAL(14, 2) NULL,
     forma ENUM('pix', 'debito', 'credito', 'dinheiro') NOT NULL,
     banco_id INT NULL,
     observacao VARCHAR(255) NULL,
     data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     importacao_id INT NULL,
     chave_externa VARCHAR(64) NULL,
+    -- Como a previsão estava antes de a importação preencher o valor (JSON), para o Desfazer
+    previsao_anterior TEXT NULL,
     INDEX idx_fin_lancamentos_data (data),
     INDEX idx_fin_lancamentos_chave (banco_id, chave_externa),
     FOREIGN KEY (categoria_id) REFERENCES fin_categorias (id),

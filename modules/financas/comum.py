@@ -3,7 +3,7 @@ from html import escape
 
 import streamlit as st
 
-from database.cores import cor_valida
+from database.cores import cor_texto, cor_valida
 from database.dinheiro import fmt_brl
 from modules import ui
 
@@ -40,7 +40,7 @@ def chip_categoria(nome, cor_categoria):
 
 def selo_banco(sigla, nome, cor_banco):
     c = cor_valida(cor_banco)
-    return (f'<span class="fin-banco"><b style="--banco:{c}">{escape(sigla or "?")}</b>'
+    return (f'<span class="fin-banco"><b style="--banco:{c};color:{cor_texto(c)}">{escape(sigla or "?")}</b>'
             f'<span>{escape(nome)}</span></span>')
 
 
@@ -58,9 +58,18 @@ def forma_html(forma):
 
 
 def valor_html(lancamento):
+    """Valor real com sinal, ou um traço no item que só tem previsão."""
+    if lancamento["valor"] is None:
+        return '<span class="fin-vazio">—</span>'
     if lancamento["tipo"] == "entrada":
         return f'<span class="fin-valor entrada">{fmt_brl(lancamento["valor"], sinal=True)}</span>'
     return f'<span class="fin-valor saida">{fmt_brl(-lancamento["valor"])}</span>'
+
+
+def previsto_html(lancamento):
+    if lancamento.get("valor_previsto") is None:
+        return '<span class="fin-vazio">—</span>'
+    return f'<span class="fin-previsto">{fmt_brl(lancamento["valor_previsto"])}</span>'
 
 
 def descricao_html(lancamento):

@@ -1,4 +1,6 @@
+import json
 from collections import Counter
+from datetime import date
 from decimal import Decimal
 
 from database.connection import duplicidade, get_cursor
@@ -127,7 +129,8 @@ def definir_saldo_inicial(valor):
 
 
 _SELECT_LANCAMENTOS = (
-    "SELECT l.id, l.tipo, l.data, l.descricao, l.categoria_id, l.valor, l.forma, l.banco_id, l.observacao, "
+    "SELECT l.id, l.tipo, l.data, l.descricao, l.categoria_id, l.valor, l.valor_previsto, l.forma, l.banco_id, "
+    "l.observacao, "
     "c.nome AS categoria_nome, c.cor AS categoria_cor, "
     "b.nome AS banco_nome, b.sigla AS banco_sigla, b.cor AS banco_cor "
     "FROM fin_lancamentos l JOIN fin_categorias c ON c.id = l.categoria_id "
@@ -145,6 +148,17 @@ def listar_lancamentos(inicio, fim, tipo=None):
         return cur.fetchall()
 
 
+def listar_previsoes_pendentes(inicio, fim):
+    """Itens com previsão e ainda sem valor real no período."""
+    with get_cursor() as cur:
+        cur.execute(
+            _SELECT_LANCAMENTOS + "WHERE l.data BETWEEN %s AND %s AND l.valor IS NULL "
+            "AND l.valor_previsto IS NOT NULL ORDER BY l.data, l.id",
+            (inicio, fim),
+        )
+        return cur.fetchall()
+
+
 def _conferir_categoria(cur, dados):
     """A tela já filtra as categorias pelo tipo; esta é a última barreira antes de gravar."""
     cur.execute("SELECT tipo FROM fin_categorias WHERE id = %s", (dados["categoria_id"],))
@@ -157,14 +171,15 @@ def _valores(dados):
     banco_id = None if dados["forma"] == "dinheiro" else dados.get("banco_id")
     return (
         dados["tipo"], dados["data"], (dados.get("descricao") or "").strip() or None, dados["categoria_id"],
-        dados["valor"], dados["forma"], banco_id, (dados.get("observacao") or "").strip() or None,
+        dados.get("valor"), dados.get("valor_previsto"), dados["forma"], banco_id,
+        (dados.get("observacao") or "").strip() or None,
     )
 
 
-_CAMPOS = "tipo, data, descricao, categoria_id, valor, forma, banco_id, observacao"
+_CAMPOS = "tipo, data, descricao, categoria_id, valor, valor_previsto, forma, banco_id, observacao"
 
 
-_INSERIR = f"INSERT INTO fin_lancamentos ({_CAMPOS}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+_INSERIR = f"INSERT INTO fin_lancamentos ({_CAMPOS}) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
 
 def criar_lancamento(dados):
@@ -190,10 +205,17 @@ def atualizar_lancamento(lancamento_id, dados):
         if cur.fetchone() is None:
             return False
         cur.execute(
-            "UPDATE fin_lancamentos SET tipo=%s, data=%s, descricao=%s, categoria_id=%s, valor=%s, forma=%s, "
-            "banco_id=%s, observacao=%s WHERE id=%s",
+            "UPDATE fin_lancamentos SET tipo=%s, data=%s, descricao=%s, categoria_id=%s, valor=%s, "
+            "valor_previsto=%s, forma=%s, banco_id=%s, observacao=%s WHERE id=%s",
             _valores(dados) + (lancamento_id,),
         )
+        # Sem valor real o item deixa de ser a transação importada, e o arquivo pode trazê-la de novo.
+        if dados.get("valor") is None:
+            cur.execute(
+                "UPDATE fin_lancamentos SET importacao_id=NULL, chave_externa=NULL, previsao_anterior=NULL "
+                "WHERE id=%s",
+                (lancamento_id,),
+            )
         return True
 
 
@@ -210,7 +232,7 @@ def totais_por_mes(ate):
             "SELECT l.data - INTERVAL (DAYOFMONTH(l.data) - 1) DAY AS mes, "
             "SUM(CASE WHEN l.tipo = 'entrada' THEN l.valor ELSE 0 END) AS entradas, "
             "SUM(CASE WHEN l.tipo <> 'entrada' THEN l.valor ELSE 0 END) AS saidas "
-            "FROM fin_lancamentos l WHERE l.data <= %s GROUP BY mes ORDER BY mes",
+            "FROM fin_lancamentos l WHERE l.data <= %s AND l.valor IS NOT NULL GROUP BY mes ORDER BY mes",
             (ate,),
         )
         linhas = cur.fetchall()
@@ -287,7 +309,8 @@ def lancamentos_para_sugestao(limite=5000):
     with get_cursor() as cur:
         cur.execute(
             "SELECT descricao, categoria_id, tipo, data, valor FROM fin_lancamentos "
-            "WHERE descricao IS NOT NULL AND descricao <> '' ORDER BY data DESC, id DESC LIMIT %s",
+            "WHERE descricao IS NOT NULL AND descricao <> '' AND valor IS NOT NULL "
+            "ORDER BY data DESC, id DESC LIMIT %s",
             (limite,),
         )
         return cur.fetchall()
@@ -313,7 +336,8 @@ def registrar_importacao(meta, lancamentos):
     """Grava a importação e todos os lançamentos dela numa transação e devolve o id da importação.
 
     `meta` leva arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, qtd_lidas,
-    qtd_duplicadas e qtd_ignoradas. Cada lançamento tem os campos de `criar_lancamento` mais `chave_externa`."""
+    qtd_duplicadas e qtd_ignoradas. Cada lançamento tem os campos de `criar_lancamento` mais `chave_externa` e,
+    quando preenche uma previsão, `previsao_id`."""
     with get_cursor() as cur:
         cur.execute(
             "INSERT INTO fin_importacoes (arquivo, banco_id, origem, observacao, periodo_inicio, periodo_fim, "
@@ -325,12 +349,36 @@ def registrar_importacao(meta, lancamentos):
         importacao_id = cur.lastrowid
         for dados in lancamentos:
             _conferir_categoria(cur, dados)
+            if dados.get("previsao_id") and _preencher_previsao(cur, importacao_id, dados):
+                continue
             cur.execute(
                 f"INSERT INTO fin_lancamentos ({_CAMPOS}, importacao_id, chave_externa) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 _valores(dados) + (importacao_id, dados.get("chave_externa")),
             )
     return importacao_id
+
+
+def _preencher_previsao(cur, importacao_id, dados):
+    """Grava a transação importada sobre a previsão. A descrição, a observação e o previsto do usuário ficam.
+    False se a previsão sumiu ou já ganhou valor, e então a linha entra como lançamento novo."""
+    cur.execute(
+        "SELECT data, descricao, categoria_id, tipo, forma, banco_id, observacao FROM fin_lancamentos "
+        "WHERE id = %s AND valor IS NULL FOR UPDATE",
+        (dados["previsao_id"],),
+    )
+    antes = cur.fetchone()
+    if antes is None:
+        return False
+    tipo, data, descricao, categoria_id, valor, _, forma, banco_id, observacao = _valores(dados)
+    cur.execute(
+        "UPDATE fin_lancamentos SET tipo=%s, data=%s, descricao=%s, categoria_id=%s, valor=%s, forma=%s, "
+        "banco_id=%s, observacao=%s, importacao_id=%s, chave_externa=%s, previsao_anterior=%s WHERE id=%s",
+        (tipo, data, antes["descricao"] or descricao, categoria_id, valor, forma, banco_id,
+         antes["observacao"] or observacao, importacao_id, dados.get("chave_externa"),
+         json.dumps(antes, default=str), dados["previsao_id"]),
+    )
+    return True
 
 
 def listar_importacoes(limite=50):
@@ -346,21 +394,56 @@ def listar_importacoes(limite=50):
         return cur.fetchall()
 
 
+# Quem teve o previsto apagado depois da importação não tem para onde voltar e é excluído com os demais.
+_VOLTA_A_PREVISAO = "(previsao_anterior IS NOT NULL AND valor_previsto IS NOT NULL)"
+
+
 def contar_lancamentos_importacao(importacao_id):
+    """(quantos serão apagados, quantos voltam a ser previsão) se a importação for desfeita."""
     with get_cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS n FROM fin_lancamentos WHERE importacao_id = %s", (importacao_id,))
-        return cur.fetchone()["n"]
+        cur.execute(
+            f"SELECT COUNT(*) AS total, COALESCE(SUM({_VOLTA_A_PREVISAO}), 0) AS voltar "
+            "FROM fin_lancamentos WHERE importacao_id = %s",
+            (importacao_id,),
+        )
+        linha = cur.fetchone()
+    voltar = int(linha["voltar"])
+    return linha["total"] - voltar, voltar
+
+
+def _voltar_a_previsao(cur, lancamento_id, antes):
+    """Categoria, tipo e descrição voltam a ser os da previsão; o previsto não é tocado."""
+    cur.execute("SELECT 1 FROM fin_bancos WHERE id = %s", (antes["banco_id"],))
+    banco_id = antes["banco_id"] if cur.fetchone() else None
+    cur.execute("SELECT 1 FROM fin_categorias WHERE id = %s", (antes["categoria_id"],))
+    # A categoria da previsão pode ter sido excluída depois; aí fica a atual.
+    categoria = antes["categoria_id"] if cur.fetchone() else None
+    cur.execute(
+        "UPDATE fin_lancamentos SET valor=NULL, data=%s, descricao=%s, tipo=%s, "
+        "categoria_id=COALESCE(%s, categoria_id), forma=%s, banco_id=%s, observacao=%s, importacao_id=NULL, "
+        "chave_externa=NULL, previsao_anterior=NULL WHERE id=%s",
+        (date.fromisoformat(antes["data"]), antes["descricao"], antes["tipo"], categoria, antes["forma"], banco_id,
+         antes["observacao"], lancamento_id),
+    )
 
 
 def desfazer_importacao(importacao_id):
-    """Apaga os lançamentos da importação (inclusive os editados depois) e a marca como desfeita. Devolve
-    quantos foram apagados, ou None se ela não existe ou já foi desfeita."""
+    """Apaga os lançamentos da importação (inclusive os editados depois), devolve ao estado de previsão os que
+    ela só preencheu e a marca como desfeita. Devolve (apagados, voltaram), ou None se ela não existe ou já
+    foi desfeita."""
     with get_cursor() as cur:
         cur.execute("SELECT status FROM fin_importacoes WHERE id = %s FOR UPDATE", (importacao_id,))
         linha = cur.fetchone()
         if linha is None or linha["status"] == "desfeita":
             return None
+        cur.execute(
+            f"SELECT id, previsao_anterior FROM fin_lancamentos WHERE importacao_id = %s AND {_VOLTA_A_PREVISAO}",
+            (importacao_id,),
+        )
+        preenchidas = cur.fetchall()
+        for registro in preenchidas:
+            _voltar_a_previsao(cur, registro["id"], json.loads(registro["previsao_anterior"]))
         cur.execute("DELETE FROM fin_lancamentos WHERE importacao_id = %s", (importacao_id,))
         apagados = cur.rowcount
         cur.execute("UPDATE fin_importacoes SET status = 'desfeita' WHERE id = %s", (importacao_id,))
-        return apagados
+        return apagados, len(preenchidas)

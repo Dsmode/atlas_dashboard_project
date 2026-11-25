@@ -54,12 +54,17 @@ def _dialogo_edicao():
         st.rerun()
 
 
+def _previsto_rotulado(lancamento):
+    return f'<span>previsto {comum.previsto_html(lancamento)}</span>'
+
+
 @st.dialog("Excluir lançamento")
 def dialogo_exclusao(lancamento):
     comum.md(
         f'<div class="fin-ext-confirma">{comum.descricao_html(lancamento)}'
         f'<div class="fin-ext-confirma-dados"><span>{lancamento["data"]:%d/%m/%Y}</span>'
-        f'{comum.valor_html(lancamento)}</div></div>'
+        f'{comum.valor_html(lancamento) if lancamento["valor"] is not None else _previsto_rotulado(lancamento)}'
+        '</div></div>'
         '<p class="fin-ext-confirma-txt">Excluir este lançamento? Não dá para desfazer.</p>'
     )
     cancelar, excluir = st.columns(2)
@@ -91,7 +96,7 @@ def _linha_copia(item):
         f'{comum.descricao_html(item)}<span class="fin-ext-forma" title="{comum.FORMA_ROTULO[item["forma"]]}">'
         f'{comum.forma_html(item["forma"])}</span>'
         f'<span class="fin-ext-banco">{comum.banco_html(item)}</span>'
-        f'<span class="fin-ext-valor">{comum.valor_html(item)}{nota}</span></div>'
+        f'<span class="fin-ext-valor">{comum.previsto_html(item)}{nota}</span></div>'
     )
 
 
@@ -106,8 +111,8 @@ def _dialogo_copia():
         return
 
     comum.md(f'<p class="fin-ext-copia-intro">Gastos fixos de <b>{calc.nome_mes(estado["anterior"])}</b> que vão '
-             f'para <b>{calc.nome_mes(mes)}</b>, no mesmo dia. Desmarque o que não quiser; depois é só ajustar '
-             'pela lista.</p>')
+             f'para <b>{calc.nome_mes(mes)}</b>, no mesmo dia, como <b>valor previsto</b>. Desmarque o que não '
+             'quiser; o valor real você informa depois, pela lista.</p>')
     with st.container(key="fin_cop_lista"):
         for i, item in enumerate(plano):
             with st.container(horizontal=True, vertical_alignment="center", gap=None, key=f"fin_cop_lin_{n}_{i}"):
@@ -124,7 +129,8 @@ def _dialogo_copia():
                      icon=":material/content_copy:", key=f"fin_cop_ok_{n}"):
         gravou, copiados = formulario.gravar(repo.criar_lancamentos, [
             {"tipo": "fixo", "data": item["data"], "descricao": item["descricao"],
-             "categoria_id": item["categoria_id"], "valor": item["valor"], "forma": item["forma"],
+             "categoria_id": item["categoria_id"], "valor": None, "valor_previsto": item["valor_previsto"],
+             "forma": item["forma"],
              "banco_id": item["banco_id"], "observacao": item["observacao"]}
             for item in marcados
         ])

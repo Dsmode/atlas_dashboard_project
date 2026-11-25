@@ -9,11 +9,32 @@ div[data-testid="stPopoverBody"]:has([class*="st-key-fin_flt_limpar"]) { min-wid
 body:has(div[data-testid="stDialog"]) [data-testid="stPopoverBody"]:has([class*="st-key-fin_flt_limpar"]) { display: none; }
 
 div[class*="st-key-fin_ext_topo_"] { flex-wrap: nowrap; margin-bottom: .1rem; }
-div[class*="st-key-fin_ext_topo_"] .fin-card-head { min-width: 0; }
+/* O total previsto vai numa segunda linha: ao lado do título ele empurrava o total real para fora. */
+div[class*="st-key-fin_ext_topo_"] .fin-card-head { min-width: 0; flex-direction: column; align-items: flex-start; gap: .05rem; }
+div[class*="st-key-fin_ext_topo_"] .fin-card-titulo { max-width: 100%; white-space: nowrap; }
+div[class*="st-key-fin_ext_topo_"] .fin-card-extra:empty { display: none; }
 div[class*="st-key-fin_ext_topo_"] .fin-card-titulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fin-ext-total { margin-left: .45rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fin-ext-total.entrada { color: var(--fin-entrada); }
 .fin-ext-total.saida { color: var(--fin-saida); }
+.fin-ext-total-previsto {
+    margin-left: 1.65rem; margin-right: .45rem; color: var(--atlas-text-dim); font-size: .8rem; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Faixa com a soma das previsões do mês */
+.fin-ext-previsao {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.5rem; padding: .55rem 1rem;
+    background: rgba(255, 255, 255, 0.025); border: 1px dashed var(--glass-border); border-radius: 12px;
+    color: var(--atlas-text-dim); font-size: .85rem;
+}
+.fin-ext-previsao .titulo { display: inline-flex; align-items: center; gap: .4rem; color: #c9c9d6; font-weight: 600; }
+.fin-ext-previsao .material-icon { font-size: 1.1rem; margin: 0; color: var(--fin-destaque); }
+.fin-ext-previsao b { margin-left: .3rem; color: #c9c9d6; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fin-ext-previsao .saldo.positivo b { color: var(--fin-entrada); }
+.fin-ext-previsao .saldo.negativo b { color: var(--fin-saida); }
+div[class*="st-key-fin_ext_grade"], .fin-ext-previsao { min-width: 0; }
+div[data-testid="stElementContainer"]:has(.fin-ext-previsao) [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 div[class*="st-key-fin_ext_copiar"] { flex: none; }
 div[class*="st-key-fin_ext_copiar"] button {
     min-height: 0; height: 2rem; padding: 0 .7rem; border-radius: 9px; font-size: .8rem; white-space: nowrap;
@@ -21,7 +42,7 @@ div[class*="st-key-fin_ext_copiar"] button {
 
 /* Listas: colunas alinhadas como tabela */
 div[class*="st-key-fin_card_ext_"] {
-    --fin-ext-cols: 2.5rem minmax(0, 1fr) 6.4rem 4.9rem 6rem;
+    --fin-ext-cols: 2.5rem minmax(0, 1fr) 5.8rem 6.4rem 4.9rem 6rem;
     --fin-ext-acoes: 5.75rem;
     --fin-ext-gap: .55rem;
 }
@@ -54,6 +75,9 @@ div[class*="st-key-fin_ext_lin_"] > div:first-child { min-width: 0; }
 .fin-ext-grade > *, .fin-ext-copia-linha > * { min-width: 0; overflow: hidden; }
 .fin-ext-data { color: #c9c9d6; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fin-ext-valor { text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.fin-previsto { color: var(--atlas-text-dim); font-variant-numeric: tabular-nums; }
+.fin-ext-grade.pendente .fin-ext-data, .fin-ext-grade.pendente .fin-desc,
+.fin-ext-grade.pendente .fin-ext-forma, .fin-ext-grade.pendente .fin-ext-banco { opacity: .75; }
 
 .fin-ext-forma .fin-forma { max-width: 100%; }
 .fin-ext-banco .fin-banco { display: flex; max-width: 100%; }
@@ -69,14 +93,48 @@ div[class*="st-key-fin_ext_bobs_"] button:disabled { opacity: .28; background: t
 /* Em blocos estreitos a forma de pagamento vira só o ícone e o banco só a sigla. */
 @container (max-width: 600px) {
     /* A consulta vale só para os descendentes do cartão: as colunas mudam na área da lista. */
-    div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.5rem minmax(0, 1fr) 6.2rem 1.3rem 6rem; }
+    div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.4rem minmax(0, 1fr) 5.4rem 5.9rem 1.3rem 1.8rem; }
+    .fin-ext-banco .fin-banco > span { display: none; }
     .fin-ext-forma .fin-forma { font-size: 0; }
     .fin-ext-forma .fin-forma .material-icon { font-size: 1.05rem; margin: 0; }
     .fin-ext-cab-forma { visibility: hidden; }
 }
 @container (max-width: 500px) {
-    div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.4rem minmax(0, 1fr) 6rem 1.3rem 1.8rem; }
-    .fin-ext-banco .fin-banco > span { display: none; }
+    div[class*="st-key-fin_card_ext_"] { --fin-ext-acoes: 5rem; }
+    div[class*="st-key-fin_ext_lista_"] {
+        --fin-ext-cols: 2.2rem minmax(0, 1fr) 4.9rem 5.3rem 1.1rem 1.6rem; --fin-ext-gap: .3rem;
+    }
+    div[class*="st-key-fin_ext_lista_"] .fin-ext-grade { font-size: .76rem; }
+    div[class*="st-key-fin_ext_acoes_"] button { width: 1.5rem; height: 1.5rem; }
+}
+
+/* Nos blocos mais apertados a forma e o banco saem para a descrição continuar legível. */
+@container (max-width: 460px) {
+    div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.2rem minmax(0, 1fr) 4.9rem 5.3rem; }
+    .fin-ext-forma, .fin-ext-banco, .fin-ext-cab-forma, .fin-ext-cab > span:nth-child(6) { display: none; }
+    div[class*="st-key-fin_ext_copiar"] button { width: 2.2rem; padding: 0; }
+    div[class*="st-key-fin_ext_copiar"] button [data-testid="stMarkdownContainer"] { display: none; }
+}
+
+/* No celular o previsto desce para baixo do valor; lado a lado não sobrava largura para a descrição. */
+@container (max-width: 380px) {
+    div[class*="st-key-fin_ext_lista_"] { --fin-ext-cols: 2.2rem minmax(0, 1fr) 5.4rem; }
+    .fin-ext-grade { grid-template-rows: auto auto; row-gap: .1rem; }
+    .fin-ext-grade > .fin-ext-data { grid-area: 1 / 1 / span 2 / 2; }
+    .fin-ext-grade > .fin-desc { grid-area: 1 / 2 / span 2 / 3; }
+    .fin-ext-grade > .fin-ext-col-valor { grid-area: 1 / 3; }
+    .fin-ext-grade > .fin-ext-col-prev { grid-area: 2 / 3; font-size: .7rem; }
+    .fin-ext-cab > span:nth-child(3) { display: none; }
+}
+
+/* Com a sidebar, abaixo de 1400 px de janela as listas não cabem em duas colunas. */
+@media (max-width: 1399px) {
+    div[class*="st-key-fin_ext_grade"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+        flex-direction: column;
+    }
+    div[class*="st-key-fin_ext_grade"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        width: 100% !important; flex: 1 1 auto !important;
+    }
 }
 
 /* Formulário */

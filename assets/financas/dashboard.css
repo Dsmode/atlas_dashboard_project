@@ -92,7 +92,6 @@ div[class*="st-key-fin_dash_rosca_corpo"] > [data-testid="stElementContainer"]:h
 @keyframes fin-surge { from { opacity: 0; transform: translateY(4px); } }
 @keyframes fin-enche { from { width: 0; } }
 @keyframes fin-sobe { from { transform: scaleY(0); opacity: 0; } }
-@keyframes fin-estica { from { transform: scaleX(0); opacity: 0; } }
 @keyframes fin-gira { from { transform: rotate(-80deg) scale(.86); opacity: 0; } }
 @keyframes fin-aparece { from { opacity: 0; } }
 @keyframes fin-revela { from { clip-path: inset(-10px 100% -10px 0); } to { clip-path: inset(-10px 0 -10px 0); } }
@@ -102,15 +101,12 @@ div[class*="st-key-fin_dash_rosca_corpo"] > [data-testid="stElementContainer"]:h
 }
 div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path,
 div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path { transition: filter .2s; }
-/* Neon dos gráficos: halo roxo nas colunas, nas barras do Top 5 (o trilho fica de fora) e nos pontos
-   do fluxo. A rosca e a linha do fluxo ficam sem brilho. O halo segue o formato da marca e é
+/* Neon dos gráficos: halo roxo nas colunas e nos pontos do fluxo. A rosca e a linha do fluxo ficam sem brilho. O halo segue o formato da marca e é
    multiplicado pela opacidade dela, por isso o tom é único e firme. */
 div[class*="st-key-fin_card_dash"] { --fin-neon: drop-shadow(0 0 3px rgba(190, 110, 255, 0.55)) drop-shadow(0 0 8px rgba(190, 110, 255, 0.5)); }
 div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark path,
-div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path,
 div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:not(:last-child) { filter: var(--fin-neon); }
-div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path:hover,
-div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks path:hover { filter: brightness(1.25) var(--fin-neon); }
+div[class*="st-key-fin_card_dash"] .mark-rect.role-mark path:hover { filter: brightness(1.25) var(--fin-neon); }
 div[class*="st-key-fin_card_dash"] .mark-arc.role-mark path:hover { filter: brightness(1.25); }
 div[class*="st-key-fin_card_dash_es"] .mark-rect.role-mark {
     transform-box: fill-box; transform-origin: 50% 100%;
@@ -127,24 +123,68 @@ div[class*="st-key-fin_card_dash_fluxo"] .mark-line.role-mark,
 div[class*="st-key-fin_card_dash_fluxo"] .mark-area.role-mark { animation: fin-revela 1.2s cubic-bezier(.3, .7, .2, 1) backwards; }
 div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark { animation: fin-aparece .4s ease-out .8s backwards; }
 div[class*="st-key-fin_card_dash_fluxo"] .mark-symbol.role-mark path:last-child { animation: fin-pulsa 3.4s ease-in-out 1.3s infinite; }
-/* Top 5: as barras esticam da esquerda (o trilho, que é a primeira camada, não) e os valores surgem
-   depois. */
-div[class*="st-key-fin_card_dash_top"] .mark-rect.role-mark.layer_1_marks {
-    transform-box: fill-box; transform-origin: 0% 50%;
-    animation: fin-estica .75s cubic-bezier(.2, .8, .2, 1) backwards;
+/* Previsto × Realizado */
+.fin-prev-rolagem { max-height: 270px; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(180, 76, 255, .35) transparent; }
+.fin-prev { width: 100%; border-collapse: collapse; font-size: .8rem; font-variant-numeric: tabular-nums; }
+div[class*="st-key-fin_card_dash_prev"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
+.fin-prev th, .fin-prev td { border: none !important; padding: .42rem .35rem; text-align: right; white-space: nowrap; }
+.fin-prev th {
+    position: sticky; top: 0; z-index: 1; background: rgb(22, 19, 34); color: var(--atlas-text-dim);
+    font-size: .64rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
 }
-div[class*="st-key-fin_card_dash_top"] .mark-text.role-mark text { animation: fin-aparece .5s ease-out .55s backwards; }
+.fin-prev th:first-child, .fin-prev td.cat { text-align: left; }
+.fin-prev tbody tr { border-top: 1px solid rgba(210, 170, 255, 0.07) !important; transition: background .2s; }
+.fin-prev tbody tr:hover { background: rgba(180, 76, 255, 0.06); }
+.fin-prev td { color: #c9c9d6; }
+.fin-prev td b { color: #ececf1; font-weight: 600; }
+.fin-prev td.cat { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+.fin-prev td.cat i {
+    display: inline-block; width: .55rem; height: .55rem; margin-right: .4rem; border-radius: 50%;
+    background: var(--cat); box-shadow: 0 0 7px var(--cat);
+}
+.fin-prev td.prev { color: var(--atlas-text-dim); }
+.fin-prev tfoot tr { border-top: 1px solid var(--glass-border) !important; }
+.fin-prev tfoot td { font-weight: 600; }
+.fin-prev-dif.abaixo { color: var(--fin-entrada); }
+.fin-prev-dif.acima { color: var(--fin-saida); }
+.fin-prev-uso { display: inline-flex; flex-direction: column-reverse; align-items: flex-end; gap: .15rem; }
+.fin-prev-uso > span { width: 2.6rem; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.fin-prev-uso i {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--atlas-purple-deep), var(--fin-destaque));
+    animation: fin-enche .9s cubic-bezier(.2, .8, .2, 1) .25s backwards;
+}
+.fin-prev-uso.acima i { background: var(--fin-saida); }
+.fin-prev-uso em { line-height: 1; font-style: normal; font-size: .74rem; color: var(--atlas-text-dim); }
+@container (max-width: 520px) {
+    .fin-prev { font-size: .74rem; }
+    .fin-prev th, .fin-prev td { padding: .38rem .25rem; }
+    .fin-prev th { letter-spacing: .04em; }
+    .fin-prev td.cat { max-width: 6.5rem; }
+}
+@container (max-width: 400px) {
+    .fin-prev { font-size: .68rem; }
+    .fin-prev th, .fin-prev td { padding: .35rem .15rem; }
+    .fin-prev th { font-size: .56rem; letter-spacing: 0; }
+    .fin-prev th:last-child, .fin-prev td:last-child { display: none; }
+    .fin-prev td.cat { max-width: 5rem; }
+    .fin-prev-dif { display: inline-block; max-width: 4.6rem; white-space: normal; line-height: 1.2; }
+}
+div[class*="st-key-fin_card_dash_prev"] { container-type: inline-size; }
 
 /* A sidebar ocupa cerca de 290 px: abaixo de 1200 px de janela os cartões ficam estreitos e passam
    para 1 coluna. */
 @media (max-width: 1199px) {
     div[class*="st-key-fin_dash_grade"] { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 900px) {
     .fin-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: .7rem; }
     .fin-resumo-item:nth-child(3) { border-left: none; }
 }
+@media (max-width: 520px) {
+    .fin-resumo-item { gap: .5rem; padding: .1rem .5rem; }
+    .fin-resumo-ico { display: none; }
+    div[class*="st-key-fin_dash_rosca_topo"] { flex-wrap: wrap; }
+}
 @media (prefers-reduced-motion: reduce) {
-    .fin-resumo-item, .fin-resumo-barra i,
+    .fin-resumo-item, .fin-resumo-barra i, .fin-prev-uso i,
     div[class*="st-key-fin_card_dash"] svg, div[class*="st-key-fin_card_dash"] svg * { animation: none !important; }
 }

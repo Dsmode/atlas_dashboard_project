@@ -2,7 +2,8 @@ from html import escape
 
 import streamlit as st
 
-from database.dinheiro import ZERO, fmt_brl
+from database.dinheiro import fmt_brl
+from database.financas import calculos as calc
 from modules.financas import comum
 from modules.financas.extrato import dialogos
 
@@ -17,7 +18,8 @@ BLOCOS = {
 }
 
 _CABECALHO = (
-    '<div class="fin-ext-cab"><span>Data</span><span>Descrição</span><span class="dir">Valor</span>'
+    '<div class="fin-ext-cab"><span>Data</span><span>Descrição</span><span class="dir">Previsto</span>'
+    '<span class="dir">Valor</span>'
     '<span class="fin-ext-cab-forma">Forma</span><span>Banco</span><span class="dir">Ações</span></div>'
 )
 
@@ -30,11 +32,13 @@ def _banco_titulo(lanc):
 
 def _linha(lanc):
     i = lanc["id"]
+    pendente = " pendente" if lanc["valor"] is None else ""
     with st.container(horizontal=True, vertical_alignment="center", gap=None, key=f"fin_ext_lin_{i}"):
         comum.md(
-            f'<div class="fin-ext-grade"><span class="fin-ext-data">{lanc["data"]:%d/%m}</span>'
+            f'<div class="fin-ext-grade{pendente}"><span class="fin-ext-data">{lanc["data"]:%d/%m}</span>'
             f'{comum.descricao_html(lanc)}'
-            f'<span class="fin-ext-valor">{comum.valor_html(lanc)}</span>'
+            f'<span class="fin-ext-valor fin-ext-col-prev">{comum.previsto_html(lanc)}</span>'
+            f'<span class="fin-ext-valor fin-ext-col-valor">{comum.valor_html(lanc)}</span>'
             f'<span class="fin-ext-forma" title="{comum.FORMA_ROTULO[lanc["forma"]]}">{comum.forma_html(lanc["forma"])}</span>'
             f'<span class="fin-ext-banco" title="{escape(_banco_titulo(lanc), quote=True)}">{comum.banco_html(lanc)}</span>'
             '</div>',
@@ -53,14 +57,20 @@ def _linha(lanc):
 
 def bloco(tipo, lancamentos, mes, filtrado):
     titulo, icone_nome, texto_vazio = BLOCOS[tipo]
-    total = sum((lanc["valor"] for lanc in lancamentos), ZERO)
+    total = calc.somar(lancamentos)
+    previsto = calc.somar(lancamentos, "valor_previsto")
+    # A linha existe mesmo sem previsão, para os cabeçalhos de blocos vizinhos terem a mesma altura.
+    texto = f"previsto {fmt_brl(previsto)}" if previsto else "sem previsão"
+    extra = f'<span class="fin-ext-total-previsto">{texto}</span>'
+    if filtrado:
+        extra += '<span class="fin-selo">filtrado</span>'
     with st.container(key=f"fin_card_ext_{tipo}"):
         with st.container(horizontal=True, vertical_alignment="center", gap="small", key=f"fin_ext_topo_{tipo}"):
             classe = "entrada" if tipo == "entrada" else "saida"
             comum.cabecalho_cartao(
                 f'{titulo}<span class="fin-ext-total {classe}">· {fmt_brl(total)}</span>',
                 icone_nome,
-                '<span class="fin-selo">filtrado</span>' if filtrado else "",
+                extra,
             )
             if tipo == "fixo" and st.button("Copiar do mês anterior", icon=":material/content_copy:",
                                             key="fin_ext_copiar", help="Trazer os gastos fixos do mês anterior"):

@@ -1,6 +1,7 @@
 """Aba Extrato: formulário de lançamento e as listas de entradas, gastos fixos e gastos variáveis.
 
-A grade é 2×2 (formulário, Entradas, Fixos, Variáveis) e um único botão Filtros vale para as três listas.
+A grade é 2×2 (formulário, Entradas, Fixos, Variáveis) e um único botão Filtros vale para as três listas e
+para a faixa de previsão do mês.
 Editar, excluir e copiar fixos abrem diálogos.
 
 formulario.py  campos do lançamento (formulário e edição) e o formulário de novo lançamento
@@ -10,10 +11,24 @@ filtros.py     botão Filtros e a filtragem"""
 
 import streamlit as st
 
+from database.dinheiro import fmt_brl
 from database.financas import calculos as calc
 from database.financas import repo
 from modules.financas import comum
 from modules.financas.extrato import filtros, formulario, listas
+
+
+def _faixa_previsao(lancamentos, filtrado):
+    previsao = calc.previsao_mes(lancamentos)
+    saldo = previsao["saldo"]
+    classe = "positivo" if saldo > 0 else ("negativo" if saldo < 0 else "")
+    selo = '<span class="fin-selo">filtrado</span>' if filtrado else ""
+    comum.md(
+        f'<div class="fin-ext-previsao"><span class="titulo">{comum.icone("query_stats")}Previsão do mês</span>'
+        f'<span>Entradas previstas <b>{fmt_brl(previsao["entradas"])}</b></span>'
+        f'<span>Gastos previstos <b>{fmt_brl(previsao["gastos"])}</b></span>'
+        f'<span class="saldo {classe}">Saldo previsto <b>{fmt_brl(saldo, sinal=True)}</b></span>{selo}</div>'
+    )
 
 
 def render(mes):
@@ -25,6 +40,8 @@ def render(mes):
 
     lancamentos = filtros.aplicar(repo.listar_lancamentos(mes, calc.fim_mes(mes)), selecao)
     por_tipo = {tipo: [lanc for lanc in lancamentos if lanc["tipo"] == tipo] for tipo in listas.BLOCOS}
+
+    _faixa_previsao(lancamentos, filtrado)
 
     with st.container(key="fin_ext_grade"):
         esquerda, direita = st.columns(2, gap="medium")

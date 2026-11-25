@@ -3,7 +3,7 @@ from html import escape
 
 import streamlit as st
 
-from database.cores import COR_PADRAO, cor_valida
+from database.cores import COR_PADRAO, cor_texto, cor_valida
 from database.dinheiro import VALOR_MAX
 from database.metas import repo
 from database.metas.modelo import (
@@ -14,7 +14,7 @@ from database.metas.modelo import (
     UNIDADE_MAX,
 )
 from database.metas.progresso import validar
-from modules.metas.visual import cor_texto, fmt_data
+from modules.metas.visual import fmt_data
 from modules.ui import escolha, script, secao
 
 OBJETIVO_ROTULO = {"aumentar": "Chegar a mais", "reduzir": "Chegar a menos"}
@@ -66,7 +66,7 @@ def _editor_tarefas(dlg):
         with st.container(horizontal=True, vertical_alignment="center", gap=None, key="dlg_nova_tarefa"):
             adicionar = st.form_submit_button("", icon=":material/add:", help="Adicionar tarefa")
             descricao = st.text_input(
-                "Nova tarefa", placeholder="Nova tarefa...", label_visibility="collapsed", width="stretch",
+                "Nova tarefa", placeholder="Nova tarefa…", label_visibility="collapsed", width="stretch",
             )
             prazo = st.date_input(
                 "Prazo da tarefa (opcional)", value=None, format="DD/MM/YYYY", label_visibility="collapsed",
@@ -137,7 +137,7 @@ def _secao_progresso(dlg):
         with col_unidade:
             unidade = st.text_input(
                 "Unidade (opcional)", value=(salvo["unidade"] or "") if salvo else "", max_chars=UNIDADE_MAX,
-                placeholder="livros, km, treinos...", key=f"dlg_unidade_{n}",
+                placeholder="livros, km, treinos…", key=f"dlg_unidade_{n}",
             ).strip() or None
     else:
         col_alvo = st.container()

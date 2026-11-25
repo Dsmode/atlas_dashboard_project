@@ -108,7 +108,7 @@ div[class*="st-key-fin_imp_cta"] { gap: .55rem; height: auto; }
 div[class*="st-key-fin_imp_cta"] [data-testid="stCaptionContainer"] { text-align: center; }
 div[class*="st-key-fin_imp_botao"] button {
     min-height: 3rem; font-size: 1rem; font-weight: 600; border: 0; color: #fff;
-    background: linear-gradient(90deg, #a53bff, #5b6dff); box-shadow: 0 0 20px rgba(150, 70, 255, .45);
+    background: linear-gradient(90deg, var(--atlas-purple-botao), #5262f0); box-shadow: 0 0 20px rgba(150, 70, 255, .45);
     transition: filter .15s, box-shadow .15s, opacity .15s;
 }
 div[class*="st-key-fin_imp_botao"] button:hover:not(:disabled) { filter: brightness(1.12); box-shadow: 0 0 26px rgba(150, 70, 255, .6); }
@@ -153,6 +153,16 @@ div[class*="st-key-fin_hist_lin_"] .fin-hist-linha { border-bottom: 0; }
 div[class*="st-key-fin_hist_lin_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0; }
 .fin-hist-reserva { width: 122px; flex: none; }
 .fin-hist-dica { color: var(--atlas-text-dim); font-size: .85rem; }
+/* No celular a tabela do histórico rola de lado; espremida, o texto quebrava letra a letra. */
+@media (max-width: 800px) {
+    div[class*="st-key-fin_card_imp_historico"] { overflow-x: auto; }
+    div[class*="st-key-fin_card_imp_historico"] > * { min-width: 56rem; }
+    div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"],
+    div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] div,
+    div[class*="st-key-fin_card_imp_arquivos"] [data-testid="stFileUploaderDropzoneInstructions"] span {
+        width: 100%; min-width: 0; white-space: normal;
+    }
+}
 div[class*="st-key-fin_hist_lin_"] { flex-wrap: nowrap; }
 div[class*="st-key-fin_hist_lin_"] [data-testid="stElementContainer"]:has(.fin-hist-linha) { flex: 1 1 0; min-width: 0; }
 div[class*="st-key-fin_hist_lin_"] div[class*="st-key-fin_hist_desf_"] { width: 122px; flex: none; }

@@ -67,6 +67,16 @@ def render_historico():
                         comum.md('<div class="fin-hist-reserva"></div>')
 
 
+def _aviso_desfeita(resultado):
+    if resultado is None:
+        return "Esta importação já foi desfeita."
+    apagados, voltaram = resultado
+    partes = [plural(apagados, "lançamento removido", "lançamentos removidos")]
+    if voltaram:
+        partes.append(plural(voltaram, "previsão restaurada", "previsões restauradas"))
+    return " · ".join(partes)
+
+
 def abrir_desfazer(importacao):
     st.session_state.fin_hist_desf = {"id": importacao["id"], "arquivo": importacao["arquivo"]}
     _dialogo_desfazer()
@@ -75,9 +85,14 @@ def abrir_desfazer(importacao):
 @st.dialog("Desfazer importação", width="medium")
 def _dialogo_desfazer():
     estado = st.session_state["fin_hist_desf"]
-    n = repo.contar_lancamentos_importacao(estado["id"])
+    n, voltam = repo.contar_lancamentos_importacao(estado["id"])
     arquivo = escape(estado["arquivo"])
-    if n == 0:
+    if voltam:
+        comum.md(f"<p>{plural(voltam, 'previsão preenchida volta', 'previsões preenchidas voltam')} a ficar sem "
+                 "valor.</p>")
+    if n == 0 and voltam:
+        comum.md(f"<p class='fin-hist-dica'>Arquivo: <b>{arquivo}</b>.</p>")
+    elif n == 0:
         comum.md(f"<p>Nenhum lançamento desta importação existe mais no Extrato (<b>{arquivo}</b>). "
                  "Só o registro será marcado como desfeito.</p>")
     else:
@@ -90,8 +105,7 @@ def _dialogo_desfazer():
         st.session_state.pop("fin_hist_desf", None)
         st.rerun()
     if confirmar.button("Desfazer importação", type="primary", width="stretch", key="fin_hist_desf_sim"):
-        apagados = repo.desfazer_importacao(estado["id"])
+        resultado = repo.desfazer_importacao(estado["id"])
         st.session_state.pop("fin_hist_desf", None)
-        comum.avisar("Esta importação já foi desfeita." if apagados is None
-                     else plural(apagados, "lançamento removido", "lançamentos removidos"))
+        comum.avisar(_aviso_desfeita(resultado))
         st.rerun()

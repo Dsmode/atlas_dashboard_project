@@ -26,9 +26,11 @@ Mostra a data e a hora, as Metas Semanais e um gráfico das metas por semana ou 
 
 Lançamentos de entradas, gastos fixos e gastos variáveis por mês, com data, descrição, categoria, valor, forma de pagamento, banco e observação. O mês se escolhe no topo, e há filtros, edição, exclusão e cópia dos gastos fixos do mês anterior.
 
+Cada lançamento aceita um **valor previsto** ao lado do valor real. A previsão não entra nos totais: ela é somada à parte, com o saldo previsto do mês. A cópia dos fixos traz os valores como previsão, e a importação de extratos sugere preencher a previsão correspondente.
+
 ![Dashboard financeiro](docs/screenshots/financeiro-dashboard.png)
 
-O Dashboard traz o resumo do mês, entradas e saídas dos últimos 6 meses, o fluxo de caixa acumulado de 12 meses, uma rosca por categoria ou por tipo e o ranking das 5 categorias que mais pesam. As configurações permitem renomear, recolorir, criar e excluir categorias e bancos, definir o saldo inicial e o seu nome, e gerenciar as regras aprendidas na importação.
+O Dashboard traz o resumo do mês, entradas e saídas dos últimos 6 meses, o fluxo de caixa acumulado de 12 meses, uma rosca por categoria ou por tipo e a tabela Previsto × Realizado por categoria. As configurações permitem renomear, recolorir, criar e excluir categorias e bancos, definir o saldo inicial e o seu nome, e gerenciar as regras aprendidas na importação.
 
 ![Extrato](docs/screenshots/financeiro-extrato.png)
 

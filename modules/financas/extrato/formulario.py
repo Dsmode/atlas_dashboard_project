@@ -19,6 +19,16 @@ def _nome_banco(banco):
     return banco["nome"] + ("" if banco["ativo"] else " (oculto)")
 
 
+def _campo_valor(coluna, rotulo, inicial, chave):
+    """Zero vale como não informado: é o jeito de apagar um valor já gravado, porque um number_input com valor
+    inicial não volta a ficar vazio."""
+    numero = coluna.number_input(
+        rotulo, value=float(inicial) if inicial is not None else None, min_value=0.0, max_value=float(VALOR_MAX),
+        step=0.01, format="%.2f", placeholder="0,00", key=chave,
+    )
+    return calc.para_decimal(numero) if numero else None
+
+
 def campos(prefixo, base, categorias, bancos):
     """Desenha os campos e devolve (dados para o repositório, categoria escolhida ou None).
 
@@ -29,12 +39,10 @@ def campos(prefixo, base, categorias, bancos):
     por_id = {c["id"]: c for c in categorias if c["tipo"] == grupo}
     ids_categoria = list(por_id)
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     data = col1.date_input("Data", value=base["data"], format="DD/MM/YYYY", key=f"{prefixo}_data")
-    numero = col2.number_input(
-        "Valor (R$)", value=float(base["valor"]) if base["valor"] is not None else None, min_value=0.0,
-        max_value=float(VALOR_MAX), step=0.01, format="%.2f", placeholder="0,00", key=f"{prefixo}_valor",
-    )
+    previsto = _campo_valor(col2, "Previsto (R$)", base["valor_previsto"], f"{prefixo}_previsto")
+    valor = _campo_valor(col3, "Valor (R$)", base["valor"], f"{prefixo}_valor")
 
     col1, col2 = st.columns(2)
     descricao = col1.text_input(
@@ -70,7 +78,7 @@ def campos(prefixo, base, categorias, bancos):
     )
     dados = {
         "tipo": tipo, "data": data, "descricao": descricao.strip(), "categoria_id": categoria_id,
-        "valor": calc.para_decimal(numero) if numero is not None else None, "forma": forma, "banco_id": banco_id,
+        "valor": valor, "valor_previsto": previsto, "forma": forma, "banco_id": banco_id,
         "observacao": observacao.strip(),
     }
     return dados, por_id.get(categoria_id)
@@ -82,7 +90,7 @@ def validar(dados, categoria):
     erro = calc.validar_lancamento(
         dados["tipo"], dados["valor"], dados["forma"], dados["banco_id"],
         categoria["tipo"] if categoria else calc.grupo_categoria(dados["tipo"]),
-        dados["descricao"], dados["observacao"],
+        dados["descricao"], dados["observacao"], valor_previsto=dados["valor_previsto"],
     )
     if not erro and categoria is None:
         erro = "Escolha a categoria."
@@ -107,7 +115,8 @@ def formulario(mes):
     ultimo = st.session_state.get("fin_ext_ultimo", {})
     base = {
         "tipo": ultimo.get("tipo", "variavel"), "data": _data_padrao(mes), "descricao": "", "categoria_id": None,
-        "valor": None, "forma": ultimo.get("forma", "pix"), "banco_id": ultimo.get("banco_id"), "observacao": "",
+        "valor": None, "valor_previsto": None, "forma": ultimo.get("forma", "pix"),
+        "banco_id": ultimo.get("banco_id"), "observacao": "",
     }
     categorias = repo.listar_categorias()
     bancos = repo.listar_bancos()  # só os ativos: banco oculto não serve para lançamento novo

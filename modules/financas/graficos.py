@@ -143,35 +143,3 @@ def fluxo_caixa(linhas):
         ],
     )
     return _finalizar(area + zero + linha + pontos)
-
-
-def top_categorias(grupos):
-    maior = max(float(g["valor"]) for g in grupos)
-    nomes = [g["nome"] for g in grupos]
-    dados = [
-        {"nome": g["nome"], "valor": float(g["valor"]), "trilho": maior, "valor_txt": fmt_brl(g["valor"]),
-         "pct_txt": fmt_pct(g["pct"])}
-        for g in grupos
-    ]
-    # Folga à direita para o valor escrito depois da maior barra.
-    escala_x = alt.Scale(domain=[0, maior * 1.42])
-    eixo_y = alt.Y(
-        "nome:N", sort=nomes, title=None, scale=alt.Scale(domain=nomes, paddingInner=0.5, paddingOuter=0.3),
-        axis=alt.Axis(ticks=False, domain=False, labelColor=_TEXTO, labelFontSize=12, labelLimit=120,
-                      labelPadding=10),
-    )
-    base = alt.Chart(pd.DataFrame(dados)).encode(y=eixo_y)
-    trilho = base.mark_bar(cornerRadius=6, color="rgba(255,255,255,.045)").encode(
-        x=alt.X("trilho:Q", axis=None, scale=escala_x))
-    barras = base.mark_bar(cornerRadiusEnd=6).encode(
-        x=alt.X("valor:Q", axis=None, scale=escala_x),
-        color=alt.Color("nome:N", legend=None,
-                        scale=alt.Scale(domain=nomes, range=[cor_valida(g["cor"]) for g in grupos])),
-        tooltip=[
-            alt.Tooltip("nome:N", title="Categoria"), alt.Tooltip("valor_txt:N", title="Gasto"),
-            alt.Tooltip("pct_txt:N", title="Dos gastos do mês"),
-        ],
-    )
-    valores = base.mark_text(align="left", dx=8, color="#e4e4ee", fontSize=12, fontWeight=500).encode(
-        x=alt.X("valor:Q", axis=None, scale=escala_x), text="valor_txt:N")
-    return _finalizar(trilho + barras + valores)

@@ -14,6 +14,9 @@
     --atlas-purple: #b44cff;
     --atlas-purple-deep: #7a2fd1;
     --atlas-purple-soft: rgba(180, 76, 255, 0.16);
+    /* Fundo de botão com texto branco: o roxo de marca dá só 3,9:1 de contraste. */
+    --atlas-purple-botao: #a23ceb;
+    --atlas-purple-botao-ativo: #9230d8;
     --atlas-magenta: #ff3dd8;
     --atlas-text-dim: #8d8d9c;
     /* Vidro: fundo translúcido com desfoque. */
@@ -162,6 +165,16 @@ section[data-testid="stSidebar"] .st-key-atlas_conta {
 .conta-setas span {
     font-family: 'Material Symbols Rounded' !important; font-size: 18px;
     font-feature-settings: 'liga'; -webkit-font-feature-settings: 'liga';
+}
+
+/* Botão principal. O :where mantém a especificidade baixa para a sidebar, as abas e os módulos com degradê
+   próprio continuarem mandando nos seus. */
+button[data-testid^="stBaseButton-primary"]:where(:not(:disabled)) {
+    background: var(--atlas-purple-botao); border-color: var(--atlas-purple-botao); color: #fff;
+}
+button[data-testid^="stBaseButton-primary"]:where(:not(:disabled)):hover,
+button[data-testid^="stBaseButton-primary"]:where(:not(:disabled)):active {
+    background: var(--atlas-purple-botao-ativo); border-color: var(--atlas-purple-botao-ativo); color: #fff;
 }
 
 /* Cartões */
@@ -382,7 +395,7 @@ div[class*="st-key-busca_categorias"] button[aria-expanded="true"] {
 
 /* Linha de altura fixa: a página não se desloca ao marcar uma categoria. */
 div[class*="st-key-flt_chips"] { flex-wrap: nowrap; height: 1.9rem; margin: 0 0 .2rem 1rem; overflow: hidden; }
-.flt-vazio { color: var(--atlas-text-dim); font-size: .74rem; opacity: .7; }
+.flt-vazio { color: var(--atlas-text-dim); font-size: .74rem; }
 div[class*="st-key-flt_chip_"] button, div[class*="st-key-dlg_chip_"] button {
     min-height: 0; height: 1.4rem; padding: 0 .45rem 0 .65rem; border: none; border-radius: 999px;
     font-size: .7rem; font-weight: 600; transition: filter .2s;
@@ -458,7 +471,7 @@ div[class*="st-key-dlg_nova_tarefa"] [data-testid="stFormSubmitButton"] button {
     background: var(--atlas-purple-soft); border: 1px solid rgba(180, 76, 255, 0.4); color: #d39bff;
     transition: background .2s, color .2s;
 }
-div[class*="st-key-dlg_nova_tarefa"] [data-testid="stFormSubmitButton"] button:hover { background: var(--atlas-purple); color: #fff; }
+div[class*="st-key-dlg_nova_tarefa"] [data-testid="stFormSubmitButton"] button:hover { background: var(--atlas-purple-botao); color: #fff; }
 div[class*="st-key-dlg_nova_tarefa"] [data-testid="stTextInputRootElement"],
 div[class*="st-key-dlg_nova_tarefa"] [data-testid="stDateInputField"],
 div[class*="st-key-dlg_nova_tarefa"] [data-baseweb="input"],

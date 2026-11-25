@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 
-from database.dinheiro import VALOR_MAX, ZERO
+from database.dinheiro import VALOR_MAX, ZERO, fmt_brl
 from database.financas.importacao import (
     Compra,
     chave_externa,
@@ -26,6 +26,10 @@ from database.financas.ofx_leitor import ExtratoOfx
 from database.financas.sugestoes import Contexto, sugerir
 from database.texto import normalizar
 
+# Quanto o valor importado pode se afastar do previsto quando só a categoria combina.
+FOLGA_PREVISAO = Decimal("0.10")
+# Descrição menor que isso é curta demais para combinar por estar contida na outra.
+DESCRICAO_MINIMA = 3
 # Duplicadas e com erro nunca são gravadas.
 SITUACOES_GRAVAVEIS = ("novo", "ignorado")
 
@@ -46,6 +50,8 @@ class LinhaRevisao:
     motivo: str
     iof: Decimal
     chave: str
+    previsao_id: int | None = None  # previsão que esta linha vai preencher; None grava um lançamento novo
+    previsao_texto: str = ""
 
 
 def preparar_compras(extrato: ExtratoOfx, inicio: date, fim: date) -> list:
@@ -83,6 +89,49 @@ def montar_linhas(compras: Sequence[Compra], origem: str, meu_nome: str, ctx: Co
     return linhas
 
 
+def _contem(texto, trecho):
+    return len(trecho) >= DESCRICAO_MINIMA and f" {trecho} " in f" {texto} "
+
+
+def _mesma_descricao(linha, previsao):
+    nova, antiga = normalizar(linha.descricao), normalizar(previsao["descricao"] or "")
+    return bool(nova and antiga) and (nova == antiga or _contem(nova, antiga) or _contem(antiga, nova))
+
+
+def _mesma_categoria_e_valor(linha, previsao):
+    previsto = previsao["valor_previsto"]
+    return linha.categoria_id == previsao["categoria_id"] and abs(linha.valor - previsto) <= FOLGA_PREVISAO * previsto
+
+
+def vincular_previsoes(linhas: Sequence[LinhaRevisao], previsoes: Sequence[dict]) -> list:
+    """Sugere, para cada linha nova, uma previsão pendente do mesmo mês e do mesmo grupo (entrada ou gasto).
+
+    Primeiro as que combinam pela descrição, em todas as linhas; depois as de mesma categoria com valor até 10%
+    distante. Cada previsão vale para uma linha só, a de valor mais próximo. A linha vinculada assume a
+    categoria e o tipo da previsão."""
+    linhas = list(linhas)
+    livres = {p["id"]: p for p in previsoes}
+    for combina in (_mesma_descricao, _mesma_categoria_e_valor):
+        pares = sorted(
+            (abs(linha.valor - p["valor_previsto"]), posicao, p["id"])
+            for posicao, linha in enumerate(linhas)
+            if linha.situacao == "novo" and linha.previsao_id is None
+            for p in livres.values()
+            if (p["tipo"] == "entrada") == linha.entrada
+            and (p["data"].year, p["data"].month) == (linha.data.year, linha.data.month) and combina(linha, p)
+        )
+        for _, posicao, previsao_id in pares:
+            if linhas[posicao].previsao_id is not None or previsao_id not in livres:
+                continue
+            p = livres.pop(previsao_id)
+            nome = (p["descricao"] or "").strip() or p["categoria_nome"]
+            linhas[posicao] = replace(
+                linhas[posicao], previsao_id=previsao_id, categoria_id=p["categoria_id"], tipo=p["tipo"],
+                previsao_texto=f"{nome} · {p['data']:%d/%m} · {fmt_brl(p['valor_previsto'])}",
+            )
+    return linhas
+
+
 def resumo(linhas: Sequence[LinhaRevisao]) -> dict:
     gravar = [linha for linha in linhas if linha.importar and linha.situacao in SITUACOES_GRAVAVEIS]
     entradas = sum((linha.valor for linha in gravar if linha.entrada), ZERO)
@@ -100,14 +149,19 @@ def resumo(linhas: Sequence[LinhaRevisao]) -> dict:
 
 
 def para_lancamentos(linhas: Sequence[LinhaRevisao], banco_id) -> list:
-    return [
-        {
+    lancamentos = []
+    for linha in linhas:
+        if not linha.importar or linha.situacao not in SITUACOES_GRAVAVEIS:
+            continue
+        dados = {
             "tipo": linha.tipo, "data": linha.data, "descricao": linha.descricao, "categoria_id": linha.categoria_id,
             "valor": linha.valor, "forma": linha.forma, "banco_id": banco_id,
             "observacao": observacao_lancamento(linha.texto_original, linha.iof), "chave_externa": linha.chave,
         }
-        for linha in linhas if linha.importar and linha.situacao in SITUACOES_GRAVAVEIS
-    ]
+        if linha.previsao_id is not None:
+            dados["previsao_id"] = linha.previsao_id
+        lancamentos.append(dados)
+    return lancamentos
 
 
 def lembrar_escolhas(originais: Sequence[LinhaRevisao], finais: Sequence[LinhaRevisao]):

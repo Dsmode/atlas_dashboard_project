@@ -50,6 +50,9 @@ def construir(estado, assinatura):
     compras = lin.preparar_compras(extrato, inicio, fim)
     existentes = repo.chaves_existentes(banco_id, [imp.chave_externa(c.principal) for c in compras])
     linhas = lin.montar_linhas(compras, extrato.origem, repo.obter_meu_nome(), _contexto(fim), existentes)
+    linhas = lin.vincular_previsoes(
+        linhas, repo.listar_previsoes_pendentes(calc.inicio_mes(inicio), calc.fim_mes(fim))
+    )
     return {
         "assinatura": assinatura, "linhas": linhas, "banco_id": banco_id, "inicio": inicio, "fim": fim,
         "origem": extrato.origem, "arquivo": estado["nome"],
@@ -77,6 +80,9 @@ def tabela(linhas, nomes_categoria, entrada):
     if not entrada:
         colunas["Tipo"] = [TIPO_ROTULO.get(linha.tipo, "Variável") for linha in linhas]
     colunas["Categoria"] = [nomes_categoria.get(linha.categoria_id, "—") for linha in linhas]
+    if any(linha.previsao_id is not None for linha in linhas):
+        colunas["Vincular"] = [linha.previsao_id is not None for linha in linhas]
+        colunas["Previsão"] = [linha.previsao_texto for linha in linhas]
     colunas["Situação"] = [_situacao(linha) for linha in linhas]
     return pd.DataFrame(colunas, index=[linha.indice for linha in linhas])
 
@@ -93,15 +99,21 @@ def aplicar_edicoes(linhas, editado, ids_por_nome, entrada):
         descricao = "" if _vazio(editada["Descrição"]) else str(editada["Descrição"]).strip()[:calc.DESCRICAO_MAX]
         ligado = not _vazio(editada["Importar"]) and bool(editada["Importar"])
         tipo = "entrada" if entrada else _TIPO_POR_ROTULO.get(editada["Tipo"], linha.tipo)
+        # Marcar "Vincular" numa linha sem sugestão não faz nada: não há previsão para ligar.
+        vinculada = "Vincular" in editado.columns and not _vazio(editada["Vincular"]) and bool(editada["Vincular"])
         novas.append(replace(
             linha, descricao=descricao, tipo=tipo, categoria_id=ids_por_nome.get(editada["Categoria"], linha.categoria_id),
             importar=ligado and linha.situacao in lin.SITUACOES_GRAVAVEIS,
+            previsao_id=linha.previsao_id if vinculada else None,
         ))
     return novas
 
 
 def _config_colunas(nomes_categoria, entrada, com_situacao):
     cfg = {
+        "Vincular": st.column_config.CheckboxColumn(
+            "Vincular", width="small", help="Preenche a previsão em vez de criar um lançamento novo."),
+        "Previsão": st.column_config.TextColumn("Previsão", width="medium"),
         "Importar": st.column_config.CheckboxColumn("Importar", width="small"),
         "Data": st.column_config.DateColumn("Data", format="DD/MM", width="small"),
         "Descrição": st.column_config.TextColumn("Descrição", max_chars=calc.DESCRICAO_MAX, width="large"),
@@ -123,7 +135,7 @@ def _editor(rev, chave, linhas_secao, entrada):
         tabela(linhas_secao, nomes, entrada), key=f"fin_rev_{chave}", hide_index=True, width="stretch",
         height=min(40 + 35 * len(linhas_secao), 380), num_rows="fixed",
         column_config=_config_colunas(nomes, entrada, any(linha.situacao != "novo" for linha in linhas_secao)),
-        disabled=["Data", "Valor", "Situação"],
+        disabled=["Data", "Valor", "Previsão", "Situação"],
     )
     return aplicar_edicoes(linhas_secao, editado, ids, entrada)
 
@@ -166,6 +178,9 @@ def _gravar(rev, finais, resumo, regras, concluir):
     for (descricao, _), regra in regras.items():
         repo.lembrar_regra(descricao, regra["categoria_id"], regra["tipo"])
     partes = [plural(len(gravaveis), "lançamento importado", "lançamentos importados")]
+    vinculados = sum(1 for linha in gravaveis if linha.previsao_id is not None)
+    if vinculados:
+        partes.append(plural(vinculados, "previsão preenchida", "previsões preenchidas"))
     if meta["qtd_duplicadas"]:
         partes.append(plural(meta["qtd_duplicadas"], "já existia", "já existiam"))
     if meta["qtd_ignoradas"]:
@@ -193,6 +208,9 @@ def _dialogo(estado, concluir):
               for chave, titulo, entrada in (("saidas", "Saídas", False), ("entradas", "Entradas", True))]
     secoes = [s for s in secoes if s[3]]
     st.caption("Edite a descrição, a categoria e o tipo direto na tabela e desmarque o que não quer importar.")
+    if any(linha.previsao_id is not None for linha in rev["linhas"]):
+        st.caption("Linhas com **Vincular** marcado preenchem o valor de uma previsão do mês, que mantém a "
+                   "descrição dela. Desmarque para criar um lançamento separado.")
     abas = st.tabs([f"{titulo} ({len(linhas)})" for _, titulo, _, linhas in secoes]) if len(secoes) > 1 else [st.container()]
     finais = []
     for aba, (chave, _, entrada, linhas) in zip(abas, secoes):

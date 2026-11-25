@@ -55,6 +55,15 @@ def _adicionar_colunas(cur, tabela, colunas):
     return adicionadas
 
 
+def _coluna_obrigatoria(cur, tabela, coluna):
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s "
+        "AND COLUMN_NAME = %s AND IS_NULLABLE = 'NO'",
+        (DB_NAME, tabela, coluna),
+    )
+    return cur.fetchone()[0] > 0
+
+
 def _migrar(cur):
     """Ajusta bancos criados por versões antigas do schema: colunas e índice que foram chegando depois."""
     if not _coluna_existe(cur, "tarefas_meta", "ordem"):
@@ -71,7 +80,11 @@ def _migrar(cur):
     adicionadas = _adicionar_colunas(cur, "fin_lancamentos", (
         ("importacao_id", "INT NULL"),
         ("chave_externa", "VARCHAR(64) NULL"),
+        ("valor_previsto", "DECIMAL(14, 2) NULL"),
+        ("previsao_anterior", "TEXT NULL"),
     ))
+    if _coluna_obrigatoria(cur, "fin_lancamentos", "valor"):
+        cur.execute("ALTER TABLE fin_lancamentos MODIFY valor DECIMAL(14, 2) NULL")
     if "importacao_id" in adicionadas:
         cur.execute(
             "ALTER TABLE fin_lancamentos ADD CONSTRAINT fk_fin_lancamentos_importacao "

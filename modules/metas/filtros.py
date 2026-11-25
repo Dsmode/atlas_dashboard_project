@@ -1,7 +1,7 @@
 import streamlit as st
 
-from database.cores import cor_valida
-from modules.metas.visual import COR_GERAL, cor_texto
+from database.cores import cor_texto, cor_valida
+from modules.metas.visual import COR_GERAL
 
 
 def _ponto_cor(cor):

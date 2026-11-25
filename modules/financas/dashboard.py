@@ -1,4 +1,3 @@
-from decimal import Decimal
 from html import escape
 
 import streamlit as st
@@ -11,7 +10,6 @@ from modules.financas import comum, graficos
 
 MESES_COLUNAS = 6  # Entradas × Saídas: o mês ativo e os 5 anteriores
 MESES_FLUXO = 12  # Fluxo de caixa: os últimos 12 meses até o mês ativo
-TOP = 5
 
 _VISOES = ("Categoria", "Tipo")  # agrupamento da rosca; Tipo é fixos × variáveis
 _VISAO_SALVA = "fin_dash_visao_salva"  # o estado do widget some ao trocar de módulo
@@ -134,22 +132,53 @@ def _cartao_fluxo(saldo_inicial, totais, mes):
         st.altair_chart(graficos.fluxo_caixa(linhas), width="stretch", theme=None)
 
 
-def _cartao_top(lancamentos, mes):
-    with st.container(key="fin_card_dash_top"):
-        comum.cabecalho_cartao(f"Top {TOP} maiores gastos por categoria", "leaderboard", calc.nome_mes(mes))
-        todas = calc.gastos_por_categoria(lancamentos)
-        if not todas:
-            _vazio("top", "Nenhum gasto neste mês.")
+def _diferenca_html(diferenca):
+    if diferenca is None:
+        return '<span class="fin-vazio">—</span>'
+    if diferenca == 0:
+        return '<span class="fin-prev-dif">no previsto</span>'
+    sentido = "abaixo" if diferenca > 0 else "acima"
+    return f'<span class="fin-prev-dif {sentido}">{fmt_brl(abs(diferenca))} {sentido}</span>'
+
+
+def _uso_html(uso):
+    if uso is None:
+        return '<span class="fin-vazio">—</span>'
+    classe = " acima" if uso > 100 else ""
+    return (f'<span class="fin-prev-uso{classe}"><span><i style="width:{min(float(uso), 100.0):.1f}%"></i></span>'
+            f'<em>{uso:.0f}%</em></span>')
+
+
+def _valor_ou_traco(valor):
+    return fmt_brl(valor) if valor else '<span class="fin-vazio">—</span>'
+
+
+def _tabela_previsto(linhas):
+    corpo = "".join(
+        f'<tr><td class="cat" title="{escape(g["nome"], quote=True)}"><i style="--cat:{cor_valida(g["cor"])}"></i>'
+        f'{escape(g["nome"])}</td><td class="prev">{_valor_ou_traco(g["previsto"])}</td>'
+        f'<td><b>{fmt_brl(g["realizado"])}</b></td><td>{_diferenca_html(g["diferenca"])}</td>'
+        f'<td>{_uso_html(g["uso"])}</td></tr>'
+        for g in linhas
+    )
+    previsto = sum((g["previsto"] for g in linhas), ZERO)
+    realizado = sum((g["realizado"] for g in linhas), ZERO)
+    return (
+        '<div class="fin-prev-rolagem"><table class="fin-prev"><thead><tr><th>Categoria</th><th>Previsto</th>'
+        '<th>Realizado</th><th>Diferença</th><th>Uso</th></tr></thead>'
+        f'<tbody>{corpo}</tbody><tfoot><tr><td class="cat">Total</td><td class="prev">{_valor_ou_traco(previsto)}</td>'
+        f'<td><b>{fmt_brl(realizado)}</b></td><td></td><td></td></tr></tfoot></table></div>'
+    )
+
+
+def _cartao_previsto(lancamentos, mes):
+    with st.container(key="fin_card_dash_prev"):
+        comum.cabecalho_cartao("Previsto × Realizado", "fact_check", calc.nome_mes(mes))
+        linhas = calc.previsto_realizado(lancamentos)
+        if not linhas:
+            _vazio("prev", "Nenhum gasto ou previsão neste mês.")
             return
-        top = todas[:TOP]
-        qtd = len(todas)
-        itens = [(comum.COR_DESTAQUE, f"{qtd} {'categoria' if qtd == 1 else 'categorias'} com gasto", "")]
-        # Com até 5 categorias o ranking já mostra tudo; acima disso, mostra quanto o top concentra.
-        if qtd > TOP:
-            soma_pct = min(sum((g["pct"] for g in top), ZERO), Decimal(100))
-            itens.append((comum.COR_DESTAQUE, f"As {TOP} maiores somam", calc.fmt_pct(soma_pct)))
-        comum.md(_legenda(itens))
-        st.altair_chart(graficos.top_categorias(top), width="stretch", theme=None)
+        comum.md(_tabela_previsto(linhas))
 
 
 def render(mes):
@@ -161,9 +190,10 @@ def render(mes):
 
     with st.container(key="fin_dash"):
         _resumo(resumo)
-        # A grade segue esta ordem: Entradas × Saídas, Para onde vai o dinheiro, Fluxo de caixa e Top 5.
+        # A grade segue esta ordem: Entradas × Saídas, Para onde vai o dinheiro, Fluxo de caixa e Previsto ×
+        # Realizado.
         with st.container(key="fin_dash_grade"):
             _cartao_entradas_saidas(totais, mes)
             _cartao_rosca(lancamentos, resumo["saidas"])
             _cartao_fluxo(saldo_inicial, totais, mes)
-            _cartao_top(lancamentos, mes)
+            _cartao_previsto(lancamentos, mes)

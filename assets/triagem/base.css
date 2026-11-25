@@ -6,6 +6,13 @@
 .st-key-tri_raiz .atlas-sub { margin-bottom: 0; }
 .st-key-tri_raiz > [data-testid="stElementContainer"]:first-child { margin-bottom: 8px; }
 .st-key-tri_grade [data-testid="stHorizontalBlock"] { gap: var(--tri-gap); }
+/* Com a sidebar, três cards por linha ficam estreitos demais abaixo de 1200 px: passam a quebrar a linha. */
+@media (max-width: 1199px) and (min-width: 641px) {
+    .st-key-tri_raiz [data-testid="stHorizontalBlock"]:has([class*="st-key-tri_card_"]) { flex-wrap: wrap; gap: var(--tri-gap); }
+    .st-key-tri_raiz [data-testid="stHorizontalBlock"]:has([class*="st-key-tri_card_"]) > [data-testid="stColumn"] {
+        flex: 1 1 15rem !important; min-width: 15rem !important;
+    }
+}
 
 /* Cartões em vidro, no mesmo padrão do resto do ATLAS. */
 div[class*="st-key-tri_card_"], .st-key-tri_faixa_erro {
@@ -45,7 +52,7 @@ div[class*="st-key-tri_"] button:not([kind="primary"]):hover {
 }
 div[class*="st-key-tri_"] button[kind="primary"] {
     min-height: 0; height: 40px; border-radius: 12px; border: 0;
-    background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple)); color: #fff;
+    background: linear-gradient(90deg, var(--atlas-purple-deep), var(--atlas-purple-botao)); color: #fff;
 }
 div[class*="st-key-tri_"] [data-testid="stProgress"] { margin: 4px 0; }
 

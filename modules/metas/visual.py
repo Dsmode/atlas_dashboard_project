@@ -1,14 +1,8 @@
 from html import escape
 
-from database.cores import COR_NEUTRA, cor_valida
+from database.cores import COR_NEUTRA, cor_texto, cor_valida
 
 COR_GERAL = COR_NEUTRA
-
-
-def cor_texto(cor):
-    cor = cor_valida(cor)
-    r, g, b = (int(cor[i:i + 2], 16) for i in (1, 3, 5))
-    return "#14141a" if 0.299 * r + 0.587 * g + 0.114 * b > 150 else "#ffffff"
 
 
 def chip(categoria):
